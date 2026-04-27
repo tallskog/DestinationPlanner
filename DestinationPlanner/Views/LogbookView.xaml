@@ -1,0 +1,80 @@
+<UserControl x:Class="DestinationPlanner.Views.LogbookView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <DockPanel>
+
+        <!-- Filter panel -->
+        <GroupBox DockPanel.Dock="Top" Header="Filters" Margin="6,6,6,0" Padding="6,4">
+            <WrapPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                    <Label Content="From:" VerticalAlignment="Center"/>
+                    <DatePicker SelectedDate="{Binding FilterFromDate}" Width="120" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                    <Label Content="To:" VerticalAlignment="Center"/>
+                    <DatePicker SelectedDate="{Binding FilterToDate}" Width="120" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                    <Label Content="Type:" VerticalAlignment="Center"/>
+                    <ComboBox ItemsSource="{Binding AircraftTypeOptions}"
+                              SelectedItem="{Binding FilterAircraftTypeString}"
+                              Width="100" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                    <Label Content="Departure:" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding FilterDepartureIcao, UpdateSourceTrigger=PropertyChanged}"
+                             Width="65" VerticalAlignment="Center" CharacterCasing="Upper"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,0,12,4" VerticalAlignment="Center">
+                    <Label Content="Arrival:" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding FilterArrivalIcao, UpdateSourceTrigger=PropertyChanged}"
+                             Width="65" VerticalAlignment="Center" CharacterCasing="Upper"/>
+                </StackPanel>
+                <Button Content="Clear Filters" Command="{Binding ClearFiltersCommand}"
+                        VerticalAlignment="Center" Padding="10,3" Margin="4,0,0,0"/>
+            </WrapPanel>
+        </GroupBox>
+
+        <!-- Status bar -->
+        <StatusBar DockPanel.Dock="Bottom" Padding="4,2">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusText}"/>
+            </StatusBarItem>
+        </StatusBar>
+
+        <!-- Flight grid -->
+        <DataGrid ItemsSource="{Binding FilteredFlights}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserSortColumns="True"
+                  GridLinesVisibility="Horizontal"
+                  AlternatingRowBackground="#F7F7F7"
+                  SelectionMode="Single"
+                  Margin="6,4,6,0">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Date"
+                                    Binding="{Binding Date, StringFormat='{}{0:yyyy-MM-dd}'}"
+                                    Width="105" SortMemberPath="Date"/>
+                <DataGridTextColumn Header="Type"
+                                    Binding="{Binding AircraftType}"
+                                    Width="90"/>
+                <DataGridTextColumn Header="From"
+                                    Binding="{Binding DepartureIcao}"
+                                    Width="70"/>
+                <DataGridTextColumn Header="To"
+                                    Binding="{Binding ArrivalIcao}"
+                                    Width="70"/>
+                <DataGridTextColumn Header="Block Off (UTC)"
+                                    Binding="{Binding BlockOffUtc, StringFormat='{}{0:HH:mm}'}"
+                                    Width="110" SortMemberPath="BlockOffUtc"/>
+                <DataGridTextColumn Header="Block On (UTC)"
+                                    Binding="{Binding BlockOnUtc, StringFormat='{}{0:HH:mm}'}"
+                                    Width="110" SortMemberPath="BlockOnUtc"/>
+                <DataGridTextColumn Header="Duration"
+                                    Binding="{Binding BlockTime, StringFormat='{}{0:h\\:mm}'}"
+                                    Width="75"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
+</UserControl>

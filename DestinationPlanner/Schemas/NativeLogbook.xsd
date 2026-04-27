@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           targetNamespace="urn:destination-planner:logbook:v1"
+           xmlns:tns="urn:destination-planner:logbook:v1"
+           elementFormDefault="qualified">
+
+  <xs:element name="FlightLogbook">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Flights">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Flight" type="tns:FlightType" minOccurs="0" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+      <xs:attribute name="version" type="xs:string" use="required" fixed="1.0"/>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="FlightType">
+    <xs:sequence>
+      <xs:element name="Id"               type="xs:string"/>   <!-- UUID -->
+      <xs:element name="Date"             type="xs:date"/>     <!-- YYYY-MM-DD -->
+      <xs:element name="AircraftType"     type="tns:AircraftTypeEnum"/>
+      <xs:element name="DepartureIcao"    type="tns:IcaoCode"/>
+      <xs:element name="ArrivalIcao"      type="tns:IcaoCode"/>
+      <xs:element name="BlockOffUtc"      type="xs:dateTime"/> <!-- parking-brake release -->
+      <xs:element name="BlockOnUtc"       type="xs:dateTime"/> <!-- parking-brake set on arrival -->
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:simpleType name="AircraftTypeEnum">
+    <xs:restriction base="xs:string">
+      <xs:enumeration value="Airplane"/>
+      <xs:enumeration value="Helicopter"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <xs:simpleType name="IcaoCode">
+    <xs:restriction base="xs:string">
+      <xs:pattern value="[A-Z0-9]{2,5}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+</xs:schema>

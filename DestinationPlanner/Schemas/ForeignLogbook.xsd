@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Foreign logbook import schema.
+  Produced by the external flight logbook application (format: ArrayOfFlightRecord).
+  Date format:  d.M.yyyy  (e.g. "23.3.2026")
+  Time format:  H.mm      (e.g. "16.53") — dot separator, no leading zero on hour
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           elementFormDefault="qualified">
+
+  <xs:element name="ArrayOfFlightRecord">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="FlightRecord" type="ForeignFlightType" minOccurs="0" maxOccurs="unbounded"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+  <xs:complexType name="ForeignFlightType">
+    <xs:all>
+      <xs:element name="Date"          type="xs:string"/>   <!-- d.M.yyyy -->
+      <xs:element name="Type"          type="xs:string"/>   <!-- AIRPLANE | HELICOPTER -->
+      <xs:element name="Aircraft"      type="xs:string"/>   <!-- free-form aircraft name -->
+      <xs:element name="DepartureTime" type="xs:string"/>   <!-- H.mm -->
+      <xs:element name="From"          type="xs:string"/>   <!-- ICAO departure -->
+      <xs:element name="ArrivalTime"   type="xs:string"/>   <!-- H.mm -->
+      <xs:element name="To"            type="xs:string"/>   <!-- ICAO arrival -->
+      <xs:element name="Duration"      type="xs:string" minOccurs="0"/>
+    </xs:all>
+  </xs:complexType>
+
+</xs:schema>
