@@ -51,6 +51,7 @@ public class MapViewModel : ViewModelBase
     {
         AirportDataStatus = $"{_airports.Count:N0} airports loaded";
         FiltersApplied?.Invoke(this, EventArgs.Empty);
+        LogbookChanged?.Invoke(this, EventArgs.Empty);
     }
 
     // Returns all airports matching the active filters (no viewport clipping —

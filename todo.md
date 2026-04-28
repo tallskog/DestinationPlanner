@@ -28,7 +28,7 @@
 
 ## Bugs / known issues
 
-- Logbook airports should be shown orange, but didn't notice that, even if I first imported foreign logbook and then saved logbook
+
 
 ## Wishlist for new features
 - [ ] **Show Metar information on airport tooltip click** - show current METAR information when user clicks a airport marker in addition to ICAO, name, runway length and ILS capability
