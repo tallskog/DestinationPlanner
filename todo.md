@@ -11,9 +11,8 @@
 
 ## Map tab
 
-- [ ] **Airport tooltip on click** — show ICAO, name, runway length and ILS capability when the user clicks a marker. Use `MapControl.Info` event.
 - [ ] **Highlight logbook airports differently** — logbook airports are already orange; consider adding a label or a different shape to distinguish them more clearly at low zoom.
-- [ ] **Airport count in sidebar** — update status text to show how many airports are currently visible in the viewport (needs viewport-change detection; see architecture notes).
+- [ ] **Viewport-based airport count** — status bar currently shows count of all filtered airports; narrow it to only those visible in the current viewport (needs viewport-change detection; see architecture notes).
 
 ## Logbook tab
 

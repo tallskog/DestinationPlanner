@@ -16,6 +16,8 @@ public partial class MapView : UserControl
     private MapViewModel? _vm;
     private MemoryLayer? _airportLayer;
     private MemoryLayer? _logbookLayer;
+    private int _airportCount;
+    private int _logbookCount;
 
     // Styles — kept static so the same instances are shared across all features.
     private static readonly VectorStyle AirportStyle = new()
@@ -43,9 +45,10 @@ public partial class MapView : UserControl
         _vm = DataContext as MapViewModel;
         if (_vm is null) return;
 
-        _vm.FiltersApplied += (_, _) => Dispatcher.Invoke(RefreshAirportLayer);
+        _vm.FiltersApplied += (_, _) => Dispatcher.Invoke(() => { RefreshAirportLayer(); RefreshLogbookLayer(); });
         _vm.LogbookChanged += (_, _) => Dispatcher.Invoke(RefreshLogbookLayer);
         _vm.PropertyChanged += OnVmPropertyChanged;
+        MapCtrl.Info += OnMapInfo;
 
         _airportLayer = new MemoryLayer { Name = "Airports", Style = null };
         _logbookLayer = new MemoryLayer { Name = "Logbook",  Style = null };
@@ -78,7 +81,8 @@ public partial class MapView : UserControl
         _logbookLayer.Features = airports.Select(a => MakeFeature(a, LogbookStyle)).ToList();
         _logbookLayer.DataHasChanged();
 
-        UpdateStatus(airports.Count);
+        _logbookCount = airports.Count;
+        UpdateStatus();
     }
 
     private void RefreshAirportLayer()
@@ -89,12 +93,45 @@ public partial class MapView : UserControl
         _airportLayer.Features = airports.Select(a => MakeFeature(a, AirportStyle)).ToList();
         _airportLayer.DataHasChanged();
 
-        UpdateStatus(airports.Count);
+        _airportCount = airports.Count;
+        UpdateStatus();
     }
 
-    private void UpdateStatus(int count)
+    private void UpdateStatus()
     {
-        MapStatus.Text = count > 0 ? $"{count:N0} airports" : string.Empty;
+        if (_airportCount == 0 && _logbookCount == 0)
+        {
+            MapStatus.Text = string.Empty;
+            return;
+        }
+
+        var parts = new List<string>();
+        if (_airportCount > 0) parts.Add($"{_airportCount:N0} airports");
+        if (_logbookCount > 0) parts.Add($"{_logbookCount:N0} visited");
+        MapStatus.Text = string.Join(" · ", parts);
+    }
+
+    private void OnMapInfo(object? sender, MapInfoEventArgs e)
+    {
+        if (_airportLayer is null || _logbookLayer is null) return;
+
+        var feature = e.GetMapInfo(new[] { _logbookLayer, _airportLayer })?.Feature;
+        if (feature is null)
+        {
+            AirportPopup.IsOpen = false;
+            return;
+        }
+
+        PopupIcao.Text   = feature["icao"] as string ?? string.Empty;
+        PopupName.Text   = feature["name"] as string ?? string.Empty;
+        PopupRunway.Text = feature["runway_ft"] is int ft && ft > 0
+            ? $"Longest runway: {ft:N0} ft"
+            : "Longest runway: N/A";
+        PopupIls.Text    = feature["ils"] is true
+            ? "Instrument approach: Yes"
+            : "Instrument approach: No";
+
+        AirportPopup.IsOpen = true;
     }
 
     private static PointFeature MakeFeature(Airport airport, VectorStyle style)
@@ -102,8 +139,10 @@ public partial class MapView : UserControl
         var x = GeoHelper.LonToMercatorX(airport.Longitude);
         var y = GeoHelper.LatToMercatorY(airport.Latitude);
         var feature = new PointFeature(new MPoint(x, y));
-        feature["icao"] = airport.Icao;
-        feature["name"] = airport.Name;
+        feature["icao"]       = airport.Icao;
+        feature["name"]       = airport.Name;
+        feature["runway_ft"]  = airport.LongestRunwayFt;
+        feature["ils"]        = airport.HasInstrumentApproach;
         feature.Styles.Add(style);
         return feature;
     }

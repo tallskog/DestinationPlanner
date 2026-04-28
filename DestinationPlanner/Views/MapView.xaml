@@ -81,5 +81,25 @@
         <!-- Map -->
         <mapsui:MapControl Grid.Column="1" x:Name="MapCtrl"/>
 
+        <!-- Airport info popup (shown on marker click) -->
+        <Popup x:Name="AirportPopup"
+               Grid.Column="1"
+               StaysOpen="False"
+               AllowsTransparency="True"
+               Placement="Mouse">
+            <Border Background="White" BorderBrush="#AAAAAA" BorderThickness="1"
+                    CornerRadius="3" Padding="10,7">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock x:Name="PopupIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,2"/>
+                    <TextBlock x:Name="PopupName" TextWrapping="Wrap" MaxWidth="220" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="PopupRunway" FontSize="11" Foreground="#444"/>
+                    <TextBlock x:Name="PopupIls"    FontSize="11" Foreground="#444"/>
+                </StackPanel>
+            </Border>
+        </Popup>
+
     </Grid>
 </UserControl>

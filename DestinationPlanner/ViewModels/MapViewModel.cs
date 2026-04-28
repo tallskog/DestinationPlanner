@@ -90,15 +90,26 @@ public class MapViewModel : ViewModelBase
     }
 
     // Airports in the logbook — looked up by ICAO for lat/lon.
+    // Radius filter is applied when active; runway/ILS filters are not (those are destination-search criteria).
     public IReadOnlyList<Airport> GetLogbookAirports()
     {
         if (!_airports.IsLoaded) return [];
-        return _logbook.Flights
+
+        IEnumerable<Airport> candidates = _logbook.Flights
             .SelectMany(f => new[] { f.DepartureIcao, f.ArrivalIcao })
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(icao => _airports.GetByIcao(icao))
-            .OfType<Airport>()
-            .ToList();
+            .OfType<Airport>();
+
+        if (!string.IsNullOrWhiteSpace(_filterCenterIcao) && _filterRadiusNm > 0)
+        {
+            var center = _airports.GetByIcao(_filterCenterIcao.Trim());
+            if (center is null) return [];
+            candidates = candidates
+                .Where(a => GeoHelper.DistanceNm(center.Latitude, center.Longitude, a.Latitude, a.Longitude) <= _filterRadiusNm);
+        }
+
+        return candidates.ToList();
     }
 
     private void OnApplyFilters() => FiltersApplied?.Invoke(this, EventArgs.Empty);
