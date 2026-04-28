@@ -16,6 +16,8 @@ public class MapViewModel : ViewModelBase
     private bool _requireInstrumentApproach;
     private string _filterCenterIcao = string.Empty;
     private double _filterRadiusNm;
+    private bool _showVisited = true;
+    private bool _showNotVisited = true;
     private string _airportDataStatus = "Airport data not loaded";
 
     public int MinRunway { get => _minRunway; set => SetField(ref _minRunway, value); }
@@ -24,6 +26,8 @@ public class MapViewModel : ViewModelBase
     public bool RequireInstrumentApproach { get => _requireInstrumentApproach; set => SetField(ref _requireInstrumentApproach, value); }
     public string FilterCenterIcao { get => _filterCenterIcao; set => SetField(ref _filterCenterIcao, value); }
     public double FilterRadiusNm { get => _filterRadiusNm; set => SetField(ref _filterRadiusNm, value); }
+    public bool ShowVisited { get => _showVisited; set => SetField(ref _showVisited, value); }
+    public bool ShowNotVisited { get => _showNotVisited; set => SetField(ref _showNotVisited, value); }
 
     public string AirportDataStatus
     {
@@ -86,6 +90,17 @@ public class MapViewModel : ViewModelBase
         if (minFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= minFt);
         if (maxFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= maxFt);
 
+        if (!_showVisited || !_showNotVisited)
+        {
+            var visited = _logbook.Flights
+                .SelectMany(f => new[] { f.DepartureIcao, f.ArrivalIcao })
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (!_showVisited && !_showNotVisited) return [];
+            if (!_showVisited)    candidates = candidates.Where(a => !visited.Contains(a.Icao));
+            else                  candidates = candidates.Where(a =>  visited.Contains(a.Icao));
+        }
+
         return candidates.ToList();
     }
 
@@ -93,7 +108,7 @@ public class MapViewModel : ViewModelBase
     // Radius filter is applied when active; runway/ILS filters are not (those are destination-search criteria).
     public IReadOnlyList<Airport> GetLogbookAirports()
     {
-        if (!_airports.IsLoaded) return [];
+        if (!_airports.IsLoaded || !_showVisited) return [];
 
         IEnumerable<Airport> candidates = _logbook.Flights
             .SelectMany(f => new[] { f.DepartureIcao, f.ArrivalIcao })
@@ -122,6 +137,8 @@ public class MapViewModel : ViewModelBase
         RequireInstrumentApproach = false;
         FilterCenterIcao = string.Empty;
         FilterRadiusNm = 0;
+        ShowVisited = true;
+        ShowNotVisited = true;
         FiltersApplied?.Invoke(this, EventArgs.Empty);
     }
 }
