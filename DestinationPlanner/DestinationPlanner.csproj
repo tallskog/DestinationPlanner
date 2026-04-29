@@ -12,4 +12,19 @@
     <PackageReference Include="Mapsui.Wpf" Version="5.0.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Managed SimConnect wrapper (x64, .NET Framework 4.6.1 — loads via compat layer) -->
+    <Reference Include="Microsoft.FlightSimulator.SimConnect">
+      <HintPath>Libs\Microsoft.FlightSimulator.SimConnect.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Explicit copy target because WPF SDK projects don't reliably process
+       CopyToOutputDirectory on None/Content items for native DLLs. -->
+  <Target Name="CopySimConnectNative" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)Libs\SimConnect.dll"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"/>
+  </Target>
+
 </Project>

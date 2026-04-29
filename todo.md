@@ -2,15 +2,10 @@
 
 ## In progress / next up
 
-- [ ] **SimConnect integration** — wire up `SimConnectService` to receive parking-brake events from MSFS 2024.
-  - Reference `SimConnect.dll` from the MSFS SDK (`SDK\SimConnect SDK\lib\static\SimConnect.dll`)
-  - Subscribe to `PARKING_BRAKE` sim variable (on/off transitions)
-  - Capture departure ICAO, arrival ICAO, block-off time (brake released) and block-on time (brake set)
-  - Fire `FlightCompleted` event → `LogbookService.AddFlight()`
-  - Filter out same-airport flights (already handled in `LogbookService`)
-
 ## Map tab
 
+- [x] **ICAO prefix filter** — filter airports by ICAO prefix (e.g. EF,ES for Finland & Sweden). Apply via the "Apply Filters" button.
+- [x] **Zoom-dependent circle size** — airport markers now scale smoothly with zoom level (large at city level, small dots at continent view).
 - [ ] **Highlight logbook airports differently** — logbook airports are already orange; consider adding a label or a different shape to distinguish them more clearly at low zoom.
 - [ ] **Viewport-based airport count** — status bar currently shows count of all filtered airports; narrow it to only those visible in the current viewport (needs viewport-change detection; see architecture notes).
 
@@ -24,6 +19,10 @@
 - [ ] **Persist last-used logbook path** — auto-load on startup using `Properties.Settings` or a small config file.
 - [ ] **Persist airport data path** — same idea; remember the folder so the user doesn't have to browse every time.
 - [ ] **About / help dialog** — links to OurAirports download page and MSFS SDK page.
+
+## Done
+
+- [x] **SimConnect integration** — `SimConnectService` connects to MSFS 2024 via `BRAKE PARKING INDICATOR` sim variable. Block-off (brake released) and block-on (brake set) are detected; nearest airport within 15 nm is resolved from the OurAirports data. `FlightCompleted` event flows to `LogbookService.AddFlight()`. App auto-reconnects every 10 s. Connection status shown in the window status bar.
 
 ## Bugs / known issues
 
