@@ -76,6 +76,15 @@
                 </Grid>
             </GroupBox>
 
+            <GroupBox DockPanel.Dock="Top" Header="ICAO Filter" Margin="0,0,0,4" Padding="6,4">
+                <StackPanel>
+                    <TextBox Text="{Binding IcaoPrefixes, UpdateSourceTrigger=PropertyChanged}"
+                             CharacterCasing="Upper"/>
+                    <TextBlock Foreground="Gray" FontSize="10" TextWrapping="Wrap" Margin="0,3,0,0"
+                               Text="Prefixes, comma-separated&#x0a;e.g. EF,ES for Finland &amp; Sweden"/>
+                </StackPanel>
+            </GroupBox>
+
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,4,0,0">
                 <Button Content="Apply Filters" Command="{Binding ApplyFiltersCommand}" Padding="10,3"/>
                 <Button Content="Clear"         Command="{Binding ClearFiltersCommand}" Padding="10,3" Margin="6,0,0,0"/>

@@ -4,6 +4,7 @@ using DestinationPlanner.ViewModels;
 using Mapsui;
 using Mapsui.Layers;
 using Mapsui.Styles;
+using Mapsui.Styles.Thematics;
 using Mapsui.Tiling;
 using System.ComponentModel;
 using System.Windows;
@@ -19,20 +20,17 @@ public partial class MapView : UserControl
     private int _airportCount;
     private int _logbookCount;
 
-    // Styles — kept static so the same instances are shared across all features.
-    private static readonly VectorStyle AirportStyle = new()
-    {
-        Fill    = new Brush(new Color(30, 120, 200, 200)),
-        Outline = new Pen(new Color(0, 60, 130), 1),
-        Line    = null,
-    };
+    // Layer-level IThemeStyle implementations — GetStyle receives the current viewport
+    // at render time, so the circle size scales automatically with zoom level.
+    private static readonly ZoomCircleStyle AirportStyle = new(
+        fill:         new Color(30, 120, 200, 200),
+        outline:      new Color(0, 60, 130),
+        outlineWidth: 1f);
 
-    private static readonly VectorStyle LogbookStyle = new()
-    {
-        Fill    = new Brush(new Color(220, 100, 0, 230)),
-        Outline = new Pen(new Color(140, 50, 0), 1.5f),
-        Line    = null,
-    };
+    private static readonly ZoomCircleStyle LogbookStyle = new(
+        fill:         new Color(220, 100, 0, 230),
+        outline:      new Color(140, 50, 0),
+        outlineWidth: 1.5f);
 
     public MapView()
     {
@@ -50,8 +48,8 @@ public partial class MapView : UserControl
         _vm.PropertyChanged += OnVmPropertyChanged;
         MapCtrl.Info += OnMapInfo;
 
-        _airportLayer = new MemoryLayer { Name = "Airports", Style = null };
-        _logbookLayer = new MemoryLayer { Name = "Logbook",  Style = null };
+        _airportLayer = new MemoryLayer { Name = "Airports", Style = AirportStyle };
+        _logbookLayer = new MemoryLayer { Name = "Logbook",  Style = LogbookStyle };
 
         var map = new Mapsui.Map();
         map.Layers.Add(OpenStreetMap.CreateTileLayer());
@@ -78,7 +76,7 @@ public partial class MapView : UserControl
         if (_vm is null || _logbookLayer is null) return;
 
         var airports = _vm.GetLogbookAirports();
-        _logbookLayer.Features = airports.Select(a => MakeFeature(a, LogbookStyle)).ToList();
+        _logbookLayer.Features = airports.Select(MakeFeature).ToList();
         _logbookLayer.DataHasChanged();
 
         _logbookCount = airports.Count;
@@ -90,7 +88,7 @@ public partial class MapView : UserControl
         if (_vm is null || _airportLayer is null) return;
 
         var airports = _vm.GetAllFilteredAirports();
-        _airportLayer.Features = airports.Select(a => MakeFeature(a, AirportStyle)).ToList();
+        _airportLayer.Features = airports.Select(MakeFeature).ToList();
         _airportLayer.DataHasChanged();
 
         _airportCount = airports.Count;
@@ -134,16 +132,71 @@ public partial class MapView : UserControl
         AirportPopup.IsOpen = true;
     }
 
-    private static PointFeature MakeFeature(Airport airport, VectorStyle style)
+    private static PointFeature MakeFeature(Airport airport)
     {
         var x = GeoHelper.LonToMercatorX(airport.Longitude);
         var y = GeoHelper.LatToMercatorY(airport.Latitude);
         var feature = new PointFeature(new MPoint(x, y));
-        feature["icao"]       = airport.Icao;
-        feature["name"]       = airport.Name;
-        feature["runway_ft"]  = airport.LongestRunwayFt;
-        feature["ils"]        = airport.HasInstrumentApproach;
-        feature.Styles.Add(style);
+        feature["icao"]      = airport.Icao;
+        feature["name"]      = airport.Name;
+        feature["runway_ft"] = airport.LongestRunwayFt;
+        feature["ils"]       = airport.HasInstrumentApproach;
         return feature;
+    }
+
+    // Zoom-aware layer style: returns a SymbolStyle whose scale smoothly shrinks as
+    // the user zooms out, so markers don't clutter the continent view.
+    private sealed class ZoomCircleStyle : BaseStyle, IThemeStyle
+    {
+        private readonly Color _fill;
+        private readonly Color _outline;
+        private readonly float _outlineWidth;
+
+        // Cache the last computed style to avoid allocating on every render call.
+        private SymbolStyle? _cached;
+        private double _cachedResolution = -1;
+
+        public ZoomCircleStyle(Color fill, Color outline, float outlineWidth)
+        {
+            _fill = fill;
+            _outline = outline;
+            _outlineWidth = outlineWidth;
+        }
+
+        public IStyle? GetStyle(IFeature feature, Viewport viewport)
+        {
+            var res = viewport.Resolution;
+
+            // Rebuild only when resolution changes by more than 5 %.
+            if (_cached != null &&
+                Math.Abs(res - _cachedResolution) / Math.Max(1.0, _cachedResolution) < 0.05)
+            {
+                return _cached;
+            }
+
+            _cachedResolution = res;
+            _cached = new SymbolStyle
+            {
+                Fill        = new Brush(_fill),
+                Outline     = new Pen(_outline, _outlineWidth),
+                Line        = null,
+                SymbolScale = ScaleForResolution(res),
+            };
+            return _cached;
+        }
+
+        // Logarithmic mapping: SymbolScale 0.5 at city-level zoom (10 000 m/px)
+        // down to 0.12 at continent-level zoom (2 500 000 m/px).
+        private static double ScaleForResolution(double resolution)
+        {
+            const double minScale = 0.12;
+            const double maxScale = 0.50;
+            const double logMin   = 9.21;   // ln(10_000)
+            const double logMax   = 14.73;  // ln(2_500_000)
+
+            var log = Math.Log(Math.Clamp(resolution, 10_000, 2_500_000));
+            var t   = (log - logMin) / (logMax - logMin);   // 0 = zoomed in, 1 = zoomed out
+            return maxScale - t * (maxScale - minScale);
+        }
     }
 }

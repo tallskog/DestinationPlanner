@@ -18,6 +18,7 @@ public class MapViewModel : ViewModelBase
     private double _filterRadiusNm;
     private bool _showVisited = true;
     private bool _showNotVisited = true;
+    private string _icaoPrefixes = string.Empty;
     private string _airportDataStatus = "Airport data not loaded";
 
     public int MinRunway { get => _minRunway; set => SetField(ref _minRunway, value); }
@@ -28,6 +29,7 @@ public class MapViewModel : ViewModelBase
     public double FilterRadiusNm { get => _filterRadiusNm; set => SetField(ref _filterRadiusNm, value); }
     public bool ShowVisited { get => _showVisited; set => SetField(ref _showVisited, value); }
     public bool ShowNotVisited { get => _showNotVisited; set => SetField(ref _showNotVisited, value); }
+    public string IcaoPrefixes { get => _icaoPrefixes; set => SetField(ref _icaoPrefixes, value); }
 
     public string AirportDataStatus
     {
@@ -101,6 +103,10 @@ public class MapViewModel : ViewModelBase
             else                  candidates = candidates.Where(a =>  visited.Contains(a.Icao));
         }
 
+        var prefixes = ParseIcaoPrefixes(_icaoPrefixes);
+        if (prefixes.Count > 0)
+            candidates = candidates.Where(a => prefixes.Any(p => a.Icao.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
+
         return candidates.ToList();
     }
 
@@ -124,8 +130,17 @@ public class MapViewModel : ViewModelBase
                 .Where(a => GeoHelper.DistanceNm(center.Latitude, center.Longitude, a.Latitude, a.Longitude) <= _filterRadiusNm);
         }
 
+        var prefixes = ParseIcaoPrefixes(_icaoPrefixes);
+        if (prefixes.Count > 0)
+            candidates = candidates.Where(a => prefixes.Any(p => a.Icao.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
+
         return candidates.ToList();
     }
+
+    private static IReadOnlyList<string> ParseIcaoPrefixes(string raw) =>
+        raw.Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries)
+           .Where(s => s.Length > 0)
+           .ToList();
 
     private void OnApplyFilters() => FiltersApplied?.Invoke(this, EventArgs.Empty);
 
@@ -139,6 +154,7 @@ public class MapViewModel : ViewModelBase
         FilterRadiusNm = 0;
         ShowVisited = true;
         ShowNotVisited = true;
+        IcaoPrefixes = string.Empty;
         FiltersApplied?.Invoke(this, EventArgs.Empty);
     }
 }
