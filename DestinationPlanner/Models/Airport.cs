@@ -8,4 +8,5 @@ public class Airport
     public double Longitude { get; set; }
     public int LongestRunwayFt { get; set; }
     public bool HasInstrumentApproach { get; set; }
+    public bool HasAtis { get; set; }
 }

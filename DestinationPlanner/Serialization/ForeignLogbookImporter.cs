@@ -26,6 +26,7 @@ public static class ForeignLogbookImporter
             var depTimeStr   = el.Element("DepartureTime")?.Value  ?? string.Empty;
             var arrTimeStr   = el.Element("ArrivalTime")?.Value    ?? string.Empty;
             var typeStr      = el.Element("Type")?.Value           ?? string.Empty;
+            var aircraftModel = (el.Element("Aircraft")?.Value     ?? string.Empty).Trim();
 
             if (!TryParseDate(dateStr, out var date)) continue;
             if (!TryParseTime(depTimeStr, out var depTime)) continue;
@@ -43,6 +44,7 @@ public static class ForeignLogbookImporter
             {
                 Date          = date,
                 AircraftType  = aircraftType,
+                AircraftModel = aircraftModel,
                 DepartureIcao = dep,
                 ArrivalIcao   = arr,
                 BlockOffUtc   = blockOff,

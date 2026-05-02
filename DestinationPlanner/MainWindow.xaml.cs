@@ -54,20 +54,23 @@ public partial class MainWindow : Window
         if (dlg.ShowDialog() != true) return;
 
         string airportsCsv = dlg.FileName;
-        string? runwaysCsv = null;
+        string dir = Path.GetDirectoryName(airportsCsv)!;
 
-        // Auto-detect runways.csv next to airports.csv
-        string sibling = Path.Combine(Path.GetDirectoryName(airportsCsv)!, "runways.csv");
-        if (File.Exists(sibling))
-            runwaysCsv = sibling;
+        // Auto-detect optional data files next to airports.csv
+        string? runwaysCsv     = File.Exists(Path.Combine(dir, "runways.csv"))            ? Path.Combine(dir, "runways.csv")            : null;
+        string? frequenciesCsv = File.Exists(Path.Combine(dir, "airport-frequencies.csv")) ? Path.Combine(dir, "airport-frequencies.csv") : null;
 
         var vm = (MainViewModel)DataContext;
         try
         {
-            await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv);
+            await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
             vm.Map.NotifyAirportDataLoaded();
-            if (runwaysCsv is null)
-                MessageBox.Show("airports.csv loaded.\nNo runways.csv found in the same folder — runway length filter will not work.",
+
+            var missing = new List<string>();
+            if (runwaysCsv is null)     missing.Add("runways.csv (runway length filter will not work)");
+            if (frequenciesCsv is null) missing.Add("airport-frequencies.csv (ATIS filter will not work)");
+            if (missing.Count > 0)
+                MessageBox.Show($"airports.csv loaded.\nThe following optional files were not found in the same folder:\n• {string.Join("\n• ", missing)}",
                                 "Airport data loaded", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         catch (Exception ex)

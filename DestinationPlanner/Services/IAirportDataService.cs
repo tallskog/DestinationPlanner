@@ -7,8 +7,8 @@ public interface IAirportDataService
     bool IsLoaded { get; }
     int Count { get; }
 
-    // Loads airports.csv (required) and runways.csv (optional) from OurAirports.com data.
-    Task LoadAsync(string airportsCsvPath, string? runwaysCsvPath = null);
+    // Loads airports.csv (required), runways.csv and airport-frequencies.csv (both optional) from OurAirports.com data.
+    Task LoadAsync(string airportsCsvPath, string? runwaysCsvPath = null, string? frequenciesCsvPath = null);
 
     Airport? GetByIcao(string icao);
     IReadOnlyList<Airport> GetAll();

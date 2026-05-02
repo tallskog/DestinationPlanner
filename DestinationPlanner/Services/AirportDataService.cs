@@ -15,12 +15,15 @@ public class AirportDataService : IAirportDataService
     public bool IsLoaded { get; private set; }
     public int Count => _all.Count;
 
-    public async Task LoadAsync(string airportsCsvPath, string? runwaysCsvPath = null)
+    public async Task LoadAsync(string airportsCsvPath, string? runwaysCsvPath = null, string? frequenciesCsvPath = null)
     {
         var airports = await Task.Run(() => ParseAirports(airportsCsvPath));
 
         if (runwaysCsvPath != null && File.Exists(runwaysCsvPath))
             await Task.Run(() => ApplyRunwayData(airports, runwaysCsvPath));
+
+        if (frequenciesCsvPath != null && File.Exists(frequenciesCsvPath))
+            await Task.Run(() => ApplyFrequencyData(airports, frequenciesCsvPath));
 
         _all = airports.Values.ToList();
         _byIcao = airports;
@@ -109,6 +112,29 @@ public class AirportDataService : IAirportDataService
         foreach (var (ident, len) in longest)
             if (airports.TryGetValue(ident, out var airport))
                 airport.LongestRunwayFt = len;
+    }
+
+    // airport-frequencies.csv columns: id, airport_ref, airport_ident, type, description, frequency_mhz
+    private static void ApplyFrequencyData(Dictionary<string, Airport> airports, string path)
+    {
+        using var reader = new StreamReader(path, Encoding.UTF8);
+        reader.ReadLine(); // skip header
+
+        string? line;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            var f = SplitCsv(line);
+            if (f.Length < 4) continue;
+
+            var ident = f[2].Trim();
+            var type  = f[3].Trim();
+
+            if (string.Equals(type, "ATIS", StringComparison.OrdinalIgnoreCase) &&
+                airports.TryGetValue(ident, out var airport))
+            {
+                airport.HasAtis = true;
+            }
+        }
     }
 
     // Minimal RFC-4180 CSV splitter (handles quoted fields, no escaped quotes inside quotes).

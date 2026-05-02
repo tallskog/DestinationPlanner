@@ -44,9 +44,14 @@
             </GroupBox>
 
             <GroupBox DockPanel.Dock="Top" Header="Capabilities" Margin="0,0,0,4" Padding="6,4">
-                <CheckBox IsChecked="{Binding RequireInstrumentApproach}">
-                    <TextBlock Text="Instrument approach (ILS)" TextWrapping="Wrap"/>
-                </CheckBox>
+                <StackPanel>
+                    <CheckBox IsChecked="{Binding RequireInstrumentApproach}" Margin="0,0,0,3">
+                        <TextBlock Text="Instrument approach (ILS)" TextWrapping="Wrap"/>
+                    </CheckBox>
+                    <CheckBox IsChecked="{Binding RequireAtis}">
+                        <TextBlock Text="ATIS" TextWrapping="Wrap"/>
+                    </CheckBox>
+                </StackPanel>
             </GroupBox>
 
             <GroupBox DockPanel.Dock="Top" Header="Visit Status" Margin="0,0,0,4" Padding="6,4">
@@ -94,8 +99,36 @@
                        Margin="4,8,4,0" FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap"/>
         </DockPanel>
 
-        <!-- Map -->
-        <mapsui:MapControl Grid.Column="1" x:Name="MapCtrl"/>
+        <!-- Map area with flight status bar -->
+        <DockPanel Grid.Column="1">
+
+            <!-- Flight status bar docked to the bottom of the map area -->
+            <Border DockPanel.Dock="Bottom"
+                    Background="#F5F5F5"
+                    BorderBrush="#CCCCCC"
+                    BorderThickness="0,1,0,0"
+                    Padding="8,3">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding SimStatusText}" FontSize="11">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#888888"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SimConnected}" Value="True">
+                                        <Setter Property="Foreground" Value="#1F8B1F"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding FlightInfoText}" FontSize="11" Foreground="#333333"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Map -->
+            <mapsui:MapControl x:Name="MapCtrl"/>
+
+        </DockPanel>
 
         <!-- Airport info popup (shown on marker click) -->
         <Popup x:Name="AirportPopup"

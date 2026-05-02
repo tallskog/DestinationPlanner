@@ -9,11 +9,13 @@ public class MapViewModel : ViewModelBase
 {
     private readonly IAirportDataService _airports;
     private readonly ILogbookService _logbook;
+    private readonly ISimConnectService _sim;
 
     private int _minRunway;
     private int _maxRunway;
     private bool _useMeters;
     private bool _requireInstrumentApproach;
+    private bool _requireAtis;
     private string _filterCenterIcao = string.Empty;
     private double _filterRadiusNm;
     private bool _showVisited = true;
@@ -21,10 +23,26 @@ public class MapViewModel : ViewModelBase
     private string _icaoPrefixes = string.Empty;
     private string _airportDataStatus = "Airport data not loaded";
 
+    // SimConnect flight status
+    private bool   _simConnected;
+    private string _simStatusText = "MSFS: Not connected";
+    private string _flightInfoText = string.Empty;
+    private string _departureIcao  = string.Empty;
+    private string _blockOffZulu   = string.Empty;
+    private string _flightPhase    = string.Empty;
+    private string _arrivalIcao    = string.Empty;
+    private string _blockOnZulu    = string.Empty;
+    private string _aircraftModel  = string.Empty;
+
+    public bool   SimConnected   { get => _simConnected;   private set => SetField(ref _simConnected,   value); }
+    public string SimStatusText  { get => _simStatusText;  private set => SetField(ref _simStatusText,  value); }
+    public string FlightInfoText { get => _flightInfoText; private set => SetField(ref _flightInfoText, value); }
+
     public int MinRunway { get => _minRunway; set => SetField(ref _minRunway, value); }
     public int MaxRunway { get => _maxRunway; set => SetField(ref _maxRunway, value); }
     public bool UseMeters { get => _useMeters; set => SetField(ref _useMeters, value); }
     public bool RequireInstrumentApproach { get => _requireInstrumentApproach; set => SetField(ref _requireInstrumentApproach, value); }
+    public bool RequireAtis               { get => _requireAtis;               set => SetField(ref _requireAtis,               value); }
     public string FilterCenterIcao { get => _filterCenterIcao; set => SetField(ref _filterCenterIcao, value); }
     public double FilterRadiusNm { get => _filterRadiusNm; set => SetField(ref _filterRadiusNm, value); }
     public bool ShowVisited { get => _showVisited; set => SetField(ref _showVisited, value); }
@@ -44,13 +62,24 @@ public class MapViewModel : ViewModelBase
     public event EventHandler? FiltersApplied;
     public event EventHandler? LogbookChanged;
 
-    public MapViewModel(IAirportDataService airports, ILogbookService logbook)
+    public MapViewModel(IAirportDataService airports, ILogbookService logbook, ISimConnectService sim)
     {
         _airports = airports;
-        _logbook = logbook;
+        _logbook  = logbook;
+        _sim      = sim;
+
         _logbook.FlightsChanged += (_, _) => LogbookChanged?.Invoke(this, EventArgs.Empty);
         ApplyFiltersCommand = new RelayCommand(OnApplyFilters);
         ClearFiltersCommand = new RelayCommand(OnClearFilters);
+
+        _sim.ConnectionChanged += OnSimConnectionChanged;
+        _sim.FlightStarted     += OnFlightStarted;
+        _sim.OnGroundChanged   += OnOnGroundChanged;
+        _sim.FlightCompleted   += OnFlightCompleted;
+
+        // Reflect initial connection state.
+        SimConnected  = _sim.IsConnected;
+        SimStatusText = _sim.IsConnected ? "MSFS: Connected" : "MSFS: Not connected";
     }
 
     public void NotifyAirportDataLoaded()
@@ -85,6 +114,9 @@ public class MapViewModel : ViewModelBase
 
         if (RequireInstrumentApproach)
             candidates = candidates.Where(a => a.HasInstrumentApproach);
+
+        if (RequireAtis)
+            candidates = candidates.Where(a => a.HasAtis);
 
         int minFt = UseMeters ? GeoHelper.MetersToFeet(MinRunway) : MinRunway;
         int maxFt = UseMeters ? GeoHelper.MetersToFeet(MaxRunway) : MaxRunway;
@@ -150,11 +182,71 @@ public class MapViewModel : ViewModelBase
         MaxRunway = 0;
         UseMeters = false;
         RequireInstrumentApproach = false;
+        RequireAtis = false;
         FilterCenterIcao = string.Empty;
         FilterRadiusNm = 0;
         ShowVisited = true;
         ShowNotVisited = true;
         IcaoPrefixes = string.Empty;
         FiltersApplied?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnSimConnectionChanged(object? sender, EventArgs e)
+    {
+        SimConnected  = _sim.IsConnected;
+        SimStatusText = _sim.IsConnected ? "MSFS: Connected" : "MSFS: Not connected";
+        if (!_sim.IsConnected)
+        {
+            _departureIcao = string.Empty;
+            _blockOffZulu  = string.Empty;
+            _flightPhase   = string.Empty;
+            _arrivalIcao   = string.Empty;
+            _blockOnZulu   = string.Empty;
+            _aircraftModel = string.Empty;
+            UpdateFlightInfoText();
+        }
+    }
+
+    private void OnFlightStarted(object? sender, FlightStartedEventArgs e)
+    {
+        _departureIcao = e.DepartureIcao;
+        _blockOffZulu  = e.BlockOffUtc.ToString("HH:mm:ss");
+        _aircraftModel = e.AircraftModel;
+        _arrivalIcao   = string.Empty;
+        _blockOnZulu   = string.Empty;
+        _flightPhase   = string.Empty;
+        UpdateFlightInfoText();
+    }
+
+    private void OnOnGroundChanged(object? sender, bool isOnGround)
+    {
+        _flightPhase = isOnGround ? "On Ground" : "Airborne";
+        UpdateFlightInfoText();
+    }
+
+    private void OnFlightCompleted(object? sender, FlightRecord e)
+    {
+        _arrivalIcao = e.ArrivalIcao;
+        _blockOnZulu = e.BlockOnUtc.ToString("HH:mm:ss");
+        _flightPhase = "On Ground";
+        UpdateFlightInfoText();
+    }
+
+    private void UpdateFlightInfoText()
+    {
+        if (string.IsNullOrEmpty(_departureIcao))
+        {
+            FlightInfoText = string.Empty;
+            return;
+        }
+
+        var parts = new List<string> { $"DEP: {_departureIcao}" };
+        if (!string.IsNullOrEmpty(_aircraftModel))  parts.Add(_aircraftModel);
+        if (!string.IsNullOrEmpty(_blockOffZulu)) parts.Add($"Off: {_blockOffZulu}Z");
+        if (!string.IsNullOrEmpty(_flightPhase))  parts.Add(_flightPhase);
+        if (!string.IsNullOrEmpty(_arrivalIcao))  parts.Add($"ARR: {_arrivalIcao}");
+        if (!string.IsNullOrEmpty(_blockOnZulu))  parts.Add($"On: {_blockOnZulu}Z");
+
+        FlightInfoText = "  ·  " + string.Join("  ·  ", parts);
     }
 }

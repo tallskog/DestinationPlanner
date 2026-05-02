@@ -58,6 +58,9 @@
                 <DataGridTextColumn Header="Type"
                                     Binding="{Binding AircraftType}"
                                     Width="90"/>
+                <DataGridTextColumn Header="Aircraft"
+                                    Binding="{Binding AircraftModel}"
+                                    Width="*"/>
                 <DataGridTextColumn Header="From"
                                     Binding="{Binding DepartureIcao}"
                                     Width="70"/>
