@@ -1,3 +1,4 @@
+using DestinationPlanner.Helpers;
 using DestinationPlanner.ViewModels;
 using Microsoft.Win32;
 using System.IO;
@@ -11,9 +12,29 @@ public partial class MainWindow : Window
 {
     private DispatcherTimer? _reconnectTimer;
 
-    public MainWindow()
+    public MainWindow(string logbookPath)
     {
         InitializeComponent();
+        DataContext = new MainViewModel(logbookPath);
+        Loaded += MainWindow_Loaded;
+    }
+
+    // US13 – auto-load airport data from AppData on startup if files are present
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        string airportsCsv = Path.Combine(AppDataHelper.AppDataPath, "airports.csv");
+        if (!File.Exists(airportsCsv)) return;
+
+        string? runwaysCsv     = NullIfMissing(Path.Combine(AppDataHelper.AppDataPath, "runways.csv"));
+        string? frequenciesCsv = NullIfMissing(Path.Combine(AppDataHelper.AppDataPath, "airport-frequencies.csv"));
+
+        var vm = (MainViewModel)DataContext;
+        try
+        {
+            await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
+            vm.Map.NotifyAirportDataLoaded();
+        }
+        catch { /* silently skip if cached files are corrupt – user can reload manually */ }
     }
 
     // OnSourceInitialized fires once the Win32 window handle (HWND) exists —
@@ -44,6 +65,7 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
+    // US13 – copy airport CSV files to AppData, then load from there
     private async void LoadAirportData_Click(object sender, RoutedEventArgs e)
     {
         var dlg = new OpenFileDialog
@@ -53,22 +75,38 @@ public partial class MainWindow : Window
         };
         if (dlg.ShowDialog() != true) return;
 
-        string airportsCsv = dlg.FileName;
-        string dir = Path.GetDirectoryName(airportsCsv)!;
+        string srcAirports = dlg.FileName;
+        string srcDir      = Path.GetDirectoryName(srcAirports)!;
 
-        // Auto-detect optional data files next to airports.csv
-        string? runwaysCsv     = File.Exists(Path.Combine(dir, "runways.csv"))            ? Path.Combine(dir, "runways.csv")            : null;
-        string? frequenciesCsv = File.Exists(Path.Combine(dir, "airport-frequencies.csv")) ? Path.Combine(dir, "airport-frequencies.csv") : null;
+        string destAirports = Path.Combine(AppDataHelper.AppDataPath, "airports.csv");
+        File.Copy(srcAirports, destAirports, overwrite: true);
+
+        string? srcRunways      = NullIfMissing(Path.Combine(srcDir, "runways.csv"));
+        string? srcFrequencies  = NullIfMissing(Path.Combine(srcDir, "airport-frequencies.csv"));
+
+        string? destRunways     = null;
+        string? destFrequencies = null;
+
+        if (srcRunways != null)
+        {
+            destRunways = Path.Combine(AppDataHelper.AppDataPath, "runways.csv");
+            File.Copy(srcRunways, destRunways, overwrite: true);
+        }
+        if (srcFrequencies != null)
+        {
+            destFrequencies = Path.Combine(AppDataHelper.AppDataPath, "airport-frequencies.csv");
+            File.Copy(srcFrequencies, destFrequencies, overwrite: true);
+        }
 
         var vm = (MainViewModel)DataContext;
         try
         {
-            await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
+            await vm.AirportData.LoadAsync(destAirports, destRunways, destFrequencies);
             vm.Map.NotifyAirportDataLoaded();
 
             var missing = new List<string>();
-            if (runwaysCsv is null)     missing.Add("runways.csv (runway length filter will not work)");
-            if (frequenciesCsv is null) missing.Add("airport-frequencies.csv (ATIS filter will not work)");
+            if (destRunways is null)     missing.Add("runways.csv (runway length filter will not work)");
+            if (destFrequencies is null) missing.Add("airport-frequencies.csv (ATIS filter will not work)");
             if (missing.Count > 0)
                 MessageBox.Show($"airports.csv loaded.\nThe following optional files were not found in the same folder:\n• {string.Join("\n• ", missing)}",
                                 "Airport data loaded", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -81,4 +119,6 @@ public partial class MainWindow : Window
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
+
+    private static string? NullIfMissing(string path) => File.Exists(path) ? path : null;
 }

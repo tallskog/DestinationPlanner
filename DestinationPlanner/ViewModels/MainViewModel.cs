@@ -15,13 +15,15 @@ public class MainViewModel : ViewModelBase
     private string _simStatus = "MSFS: Not connected";
     public string SimStatus { get => _simStatus; private set => SetField(ref _simStatus, value); }
 
-    public MainViewModel()
+    public MainViewModel(string logbookPath)
     {
-        var logbook  = new LogbookService();
-        AirportData  = new AirportDataService();
+        var logbook = new LogbookService();
+        logbook.Load(logbookPath);
+
+        AirportData = new AirportDataService();
 
         var sim = new SimConnectService(AirportData);
-        sim.FlightCompleted  += (_, record) => logbook.AddFlight(record);
+        sim.FlightCompleted   += (_, record) => logbook.AddFlight(record);
         sim.ConnectionChanged += (_, _) =>
             SimStatus = sim.IsConnected ? "MSFS: Connected" : "MSFS: Not connected";
         SimConnect = sim;

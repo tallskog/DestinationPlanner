@@ -8,26 +8,36 @@ public class LogbookService : ILogbookService
     private readonly List<FlightRecord> _flights = [];
 
     public IReadOnlyList<FlightRecord> Flights => _flights.AsReadOnly();
+    public string? CurrentFilePath { get; private set; }
     public event EventHandler? FlightsChanged;
 
     public void AddFlight(FlightRecord flight)
     {
-        if (!IsDuplicate(flight))
-        {
-            _flights.Add(flight);
-            FlightsChanged?.Invoke(this, EventArgs.Empty);
-        }
+        if (IsDuplicate(flight)) return;
+        _flights.Add(flight);
+        AutoSave();
+        FlightsChanged?.Invoke(this, EventArgs.Empty);
     }
-
-    public void Save(string filePath)
-        => NativeLogbookSerializer.Save(_flights, filePath);
 
     public void Load(string filePath)
     {
         _flights.Clear();
         _flights.AddRange(NativeLogbookSerializer.Load(filePath));
+        CurrentFilePath = filePath;
         FlightsChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    public void LoadInto(string sourceFilePath, string destFilePath)
+    {
+        _flights.Clear();
+        _flights.AddRange(NativeLogbookSerializer.Load(sourceFilePath));
+        CurrentFilePath = destFilePath;
+        NativeLogbookSerializer.Save(_flights, destFilePath);
+        FlightsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Export(string filePath)
+        => NativeLogbookSerializer.Save(_flights, filePath);
 
     public int ImportForeign(string filePath)
     {
@@ -41,8 +51,18 @@ public class LogbookService : ILogbookService
                 added++;
             }
         }
-        if (added > 0) FlightsChanged?.Invoke(this, EventArgs.Empty);
+        if (added > 0)
+        {
+            AutoSave();
+            FlightsChanged?.Invoke(this, EventArgs.Empty);
+        }
         return added;
+    }
+
+    private void AutoSave()
+    {
+        if (CurrentFilePath != null)
+            NativeLogbookSerializer.Save(_flights, CurrentFilePath);
     }
 
     private bool IsDuplicate(FlightRecord candidate)

@@ -58,45 +58,44 @@ public class LogbookViewModel : ViewModelBase
     public string[] AircraftTypeOptions { get; } = ["All", "Airplane", "Helicopter"];
     public ObservableCollection<FlightRecord> FilteredFlights { get; } = [];
 
-    public ICommand OpenCommand { get; }
-    public ICommand SaveCommand { get; }
-    public ICommand ImportCommand { get; }
+    public ICommand ImportNativeCommand { get; }
+    public ICommand ImportForeignCommand { get; }
+    public ICommand ExportCommand { get; }
     public ICommand ClearFiltersCommand { get; }
 
     public LogbookViewModel(ILogbookService logbook)
     {
         _logbook = logbook;
-        OpenCommand        = new RelayCommand(Open);
-        SaveCommand        = new RelayCommand(Save, () => _logbook.Flights.Count > 0);
-        ImportCommand      = new RelayCommand(Import);
-        ClearFiltersCommand = new RelayCommand(ClearFilters);
-    }
+        _logbook.FlightsChanged += (_, _) => ApplyFilters();
 
-    private void Open()
-    {
-        var dlg = new OpenFileDialog
-        {
-            Title  = "Open Logbook",
-            Filter = "Logbook XML (*.xml)|*.xml|All files (*.*)|*.*"
-        };
-        if (dlg.ShowDialog() != true) return;
-        _logbook.Load(dlg.FileName);
+        ImportNativeCommand  = new RelayCommand(ImportNative);
+        ImportForeignCommand = new RelayCommand(ImportForeign);
+        ExportCommand        = new RelayCommand(Export, () => _logbook.Flights.Count > 0);
+        ClearFiltersCommand  = new RelayCommand(ClearFilters);
+
         ApplyFilters();
     }
 
-    private void Save()
+    // US15.1 – import native logbook: creates a new logbook file in AppData
+    private void ImportNative()
     {
-        var dlg = new SaveFileDialog
+        var dlg = new OpenFileDialog
         {
-            Title      = "Save Logbook",
-            Filter     = "Logbook XML (*.xml)|*.xml",
-            DefaultExt = "xml"
+            Title  = "Import Logbook",
+            Filter = "Logbook XML (*.xml)|*.xml|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;
-        _logbook.Save(dlg.FileName);
+
+        string newPath = AppDataHelper.GetNewLogbookPath(DateTime.Now);
+        _logbook.LoadInto(dlg.FileName, newPath);
+        ApplyFilters();
+
+        int count = _logbook.Flights.Count;
+        MessageBox.Show($"Imported {count} flight{(count == 1 ? "" : "s")} into new logbook\n{System.IO.Path.GetFileName(newPath)}.",
+                        "Import complete", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private void Import()
+    private void ImportForeign()
     {
         var dlg = new OpenFileDialog
         {
@@ -108,6 +107,20 @@ public class LogbookViewModel : ViewModelBase
         ApplyFilters();
         MessageBox.Show($"Imported {added} new flight{(added == 1 ? "" : "s")}.",
                         "Import complete", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+
+    // US15.2 – export to user-chosen location (does not affect the auto-save logbook)
+    private void Export()
+    {
+        var dlg = new SaveFileDialog
+        {
+            Title      = "Export Logbook",
+            Filter     = "Logbook XML (*.xml)|*.xml",
+            DefaultExt = "xml",
+            FileName   = System.IO.Path.GetFileName(_logbook.CurrentFilePath ?? "logbook.xml")
+        };
+        if (dlg.ShowDialog() != true) return;
+        _logbook.Export(dlg.FileName);
     }
 
     private void ClearFilters()
@@ -164,10 +177,14 @@ public class LogbookViewModel : ViewModelBase
 
         int total = _logbook.Flights.Count;
         int shown = FilteredFlights.Count;
+        string file = _logbook.CurrentFilePath is string p
+            ? $" — {System.IO.Path.GetFileName(p)}"
+            : string.Empty;
+
         StatusText = total == 0
-            ? "No logbook loaded"
+            ? $"No flights{file}"
             : shown == total
-                ? $"{total} flight{(total == 1 ? "" : "s")}"
-                : $"{shown} of {total} flight{(total == 1 ? "" : "s")} shown";
+                ? $"{total} flight{(total == 1 ? "" : "s")}{file}"
+                : $"{shown} of {total} flight{(total == 1 ? "" : "s")} shown{file}";
     }
 }

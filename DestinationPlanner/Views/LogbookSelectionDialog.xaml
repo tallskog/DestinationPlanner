@@ -1,0 +1,22 @@
+<Window x:Class="DestinationPlanner.Views.LogbookSelectionDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Select Logbook"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+
+    <StackPanel Margin="16">
+        <TextBlock Text="Multiple logbook files found. Select which one to use:"
+                   TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+        <ListBox x:Name="LogbookList"
+                 Height="180"
+                 SelectionMode="Single"
+                 MouseDoubleClick="LogbookList_MouseDoubleClick"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="OK" Width="80" IsDefault="True" Click="Ok_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
