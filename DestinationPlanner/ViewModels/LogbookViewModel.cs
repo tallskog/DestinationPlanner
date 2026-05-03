@@ -1,6 +1,7 @@
 using DestinationPlanner.Helpers;
 using DestinationPlanner.Models;
 using DestinationPlanner.Services;
+using DestinationPlanner.Views;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Windows;
@@ -18,6 +19,7 @@ public class LogbookViewModel : ViewModelBase
     private string _filterDepartureIcao = string.Empty;
     private string _filterArrivalIcao = string.Empty;
     private string _statusText = "No logbook loaded";
+    private FlightRecord? _selectedFlight;
 
     public DateTime? FilterFromDate
     {
@@ -55,6 +57,12 @@ public class LogbookViewModel : ViewModelBase
         private set => SetField(ref _statusText, value);
     }
 
+    public FlightRecord? SelectedFlight
+    {
+        get => _selectedFlight;
+        set => SetField(ref _selectedFlight, value);
+    }
+
     public string[] AircraftTypeOptions { get; } = ["All", "Airplane", "Helicopter"];
     public ObservableCollection<FlightRecord> FilteredFlights { get; } = [];
 
@@ -62,6 +70,8 @@ public class LogbookViewModel : ViewModelBase
     public ICommand ImportForeignCommand { get; }
     public ICommand ExportCommand { get; }
     public ICommand ClearFiltersCommand { get; }
+    public ICommand EditFlightCommand { get; }
+    public ICommand DeleteFlightCommand { get; }
 
     public LogbookViewModel(ILogbookService logbook)
     {
@@ -72,6 +82,8 @@ public class LogbookViewModel : ViewModelBase
         ImportForeignCommand = new RelayCommand(ImportForeign);
         ExportCommand        = new RelayCommand(Export, () => _logbook.Flights.Count > 0);
         ClearFiltersCommand  = new RelayCommand(ClearFilters);
+        EditFlightCommand    = new RelayCommand(EditFlight,   () => _selectedFlight != null);
+        DeleteFlightCommand  = new RelayCommand(DeleteFlight, () => _selectedFlight != null);
 
         ApplyFilters();
     }
@@ -138,6 +150,25 @@ public class LogbookViewModel : ViewModelBase
         OnPropertyChanged(nameof(FilterArrivalIcao));
 
         ApplyFilters();
+    }
+
+    private void EditFlight()
+    {
+        if (_selectedFlight is null) return;
+        var vm = EditFlightViewModel.FromRecord(_selectedFlight);
+        var dlg = new EditFlightDialog(vm) { Owner = Application.Current.MainWindow };
+        if (dlg.ShowDialog() != true) return;
+        _logbook.UpdateFlight(vm.ToRecord(_selectedFlight.Id));
+    }
+
+    private void DeleteFlight()
+    {
+        if (_selectedFlight is null) return;
+        var result = MessageBox.Show(
+            $"Delete flight {_selectedFlight.DepartureIcao} → {_selectedFlight.ArrivalIcao} on {_selectedFlight.Date:yyyy-MM-dd}?",
+            "Delete Flight", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+        if (result != MessageBoxResult.Yes) return;
+        _logbook.RemoveFlight(_selectedFlight.Id);
     }
 
     private void ApplyFilters()

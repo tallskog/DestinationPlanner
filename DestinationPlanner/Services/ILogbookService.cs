@@ -8,6 +8,8 @@ public interface ILogbookService
     string? CurrentFilePath { get; }
     event EventHandler FlightsChanged;
     void AddFlight(FlightRecord flight);
+    void RemoveFlight(Guid id);
+    void UpdateFlight(FlightRecord updated);
     /// <summary>Load from filePath and set it as the active logbook (auto-saves on changes).</summary>
     void Load(string filePath);
     /// <summary>Load flights from sourcePath but save to and track destPath (US15.1 import).</summary>

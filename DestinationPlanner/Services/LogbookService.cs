@@ -19,6 +19,24 @@ public class LogbookService : ILogbookService
         FlightsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void RemoveFlight(Guid id)
+    {
+        var flight = _flights.FirstOrDefault(f => f.Id == id);
+        if (flight is null) return;
+        _flights.Remove(flight);
+        AutoSave();
+        FlightsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void UpdateFlight(FlightRecord updated)
+    {
+        var idx = _flights.FindIndex(f => f.Id == updated.Id);
+        if (idx < 0) return;
+        _flights[idx] = updated;
+        AutoSave();
+        FlightsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Load(string filePath)
     {
         _flights.Clear();

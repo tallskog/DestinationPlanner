@@ -11,7 +11,7 @@
 
 ## Logbook tab
 
-- [ ] **Edit / delete a flight** — right-click context menu on a DataGrid row.
+- [x] **Edit / delete a flight** — right-click context menu on a DataGrid row.
 - [ ] **Export to CSV** — useful for importing into spreadsheets or other tools.
 
 ## General

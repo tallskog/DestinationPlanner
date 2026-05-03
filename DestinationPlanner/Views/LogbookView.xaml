@@ -44,6 +44,7 @@
 
         <!-- Flight grid -->
         <DataGrid ItemsSource="{Binding FilteredFlights}"
+                  SelectedItem="{Binding SelectedFlight}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
                   CanUserSortColumns="True"
@@ -51,6 +52,12 @@
                   AlternatingRowBackground="#F7F7F7"
                   SelectionMode="Single"
                   Margin="6,4,6,0">
+            <DataGrid.ContextMenu>
+                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                    <MenuItem Header="Edit..." Command="{Binding EditFlightCommand}"/>
+                    <MenuItem Header="Delete" Command="{Binding DeleteFlightCommand}"/>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Date"
                                     Binding="{Binding Date, StringFormat='{}{0:yyyy-MM-dd}'}"
