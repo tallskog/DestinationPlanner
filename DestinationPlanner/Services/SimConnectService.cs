@@ -24,6 +24,13 @@ public class SimConnectService : ISimConnectService
     private bool _lastOnGround = true;
     private bool _inFlight;      // true between block-off and block-on
 
+    // MSFS briefly sends stale/loading-state data after a connection is established
+    // (e.g. last-session coordinates before the actual flight position is loaded).
+    // We absorb data for this many seconds, keeping _lastBrake/_lastOnGround current
+    // but not firing any events, so the first real event comes from a stable state.
+    private const int StabilizationSeconds = 5;
+    private DateTime _connectedAt;
+
     private string?      _departureIcao;
     private DateTime     _blockOffUtc;
     private string       _aircraftModel = string.Empty;
@@ -128,6 +135,7 @@ public class SimConnectService : ISimConnectService
         _lastOnGround  = true;
         _departureIcao = null;
         _aircraftModel = string.Empty;
+        _connectedAt   = DateTime.UtcNow;
         SetConnected(true);
     }
 
@@ -160,6 +168,16 @@ public class SimConnectService : ISimConnectService
             _lastBrake    = brakeOn;
             _lastOnGround = onGround;
             _initialized  = true;
+            return;
+        }
+
+        // Still inside the post-connect stabilization window: keep tracking state
+        // but don't fire events. This absorbs any loading-state jitter from MSFS
+        // (e.g. stale coordinates or brake transitions before the sim fully loads).
+        if ((DateTime.UtcNow - _connectedAt).TotalSeconds < StabilizationSeconds)
+        {
+            _lastBrake    = brakeOn;
+            _lastOnGround = onGround;
             return;
         }
 
@@ -234,6 +252,9 @@ public class SimConnectService : ISimConnectService
     }
 
     // Returns the ICAO of the nearest airport within 15 nm, or null if none found.
+    // Only considers airports with standard ICAO-style identifiers (no hyphens).
+    // OurAirports uses region codes like "US-12381" for airports without an ICAO
+    // designation; those are not useful for a flight logbook.
     private string? NearestIcao(double lat, double lon)
     {
         if (!_airports.IsLoaded) return null;
@@ -244,6 +265,7 @@ public class SimConnectService : ISimConnectService
             lon - margin, lon + margin);
 
         return candidates
+            .Where(a => !a.Icao.Contains('-'))
             .Select(a => (a.Icao, dist: GeoHelper.DistanceNm(lat, lon, a.Latitude, a.Longitude)))
             .Where(x => x.dist <= 15.0)
             .OrderBy(x => x.dist)

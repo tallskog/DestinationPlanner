@@ -21,7 +21,7 @@ US6.5: Arrival airport
 US6.6: Tracking of the flight is not needed
 US7: If depature and arrival are the same airport, the flight shall not be collected
 US8: All flights shall be stored to an external file (it shall be decided whether json or xml format shall be used), which will work as flight logbook for this application
-US9: User might have already lots of flights done, it shall be possible to import a logbook file (either in json or xmö format) created by another application
+US9: User might have already lots of flights done, it shall be possible to import a logbook file (either in json or xml format) created by another application
 US9.1: When importing logbook, it shall be checked that no duplicates exists
 US10: User shall be able to investigate the logbook in text format by setting different kind of filters, se US6.1 - US6.5. This investigation shall be in another tab from the map
 US11: The airports found from the logbook shall be also indicated in map. The filters that can be used to investigate the logbook, shall also be available in map view
@@ -32,3 +32,14 @@ US15: User shall have an option to import and export logbook in format known to 
 US15.1: When importing, a new logbook shall be created. The filename format shall follow the same rules as with default logbook. If file already exists, a running number shall be inserted between the date and word "logbook"
 US15.2: When exporting, user shall be given an option to select where the logbook shall be written and possibly change the logbook file name
 US15.3: When there are more than one logbook file in appdata folder, application shall ask which one to use when starting up. If only one logbook file exists, app will use that automatically
+US16: When clicking an airport from a map, a popup window shall appear anchored near the airport marker. The popup shall show:
+US16.1: The ICAO code and name of the airport
+US16.2: Each individual runway with its length in feet (sorted longest first). If no runway data is available, "N/A" is shown.
+US16.3: The current METAR fetched from an external source (aviationweather.gov). While loading, "METAR: Loading…" is shown. If no METAR is available, "METAR: Not available" is shown.
+US17: It shall be possible to select two airports simultaneously.
+US17.1: Clicking the left mouse button on an airport opens a single primary popup (blue border). Any previously selected secondary airport is cleared.
+US17.2: Clicking Ctrl+left mouse button on an airport opens a secondary popup (orange border) alongside the primary. If no primary is selected yet, the clicked airport becomes the primary.
+US17.3: Clicking Ctrl+left mouse again replaces the secondary airport with the newly clicked one.
+US17.4: When two airports are selected, a dashed line is drawn between them on the map with the distance in nautical miles shown at the midpoint.
+US17.5: Both popups are anchored near their respective airport markers and move with the map when the user pans or zooms.
+US17.6: Clicking an empty area on the map closes both popups and clears the selection.

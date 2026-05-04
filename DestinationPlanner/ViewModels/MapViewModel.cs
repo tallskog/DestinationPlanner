@@ -82,6 +82,8 @@ public class MapViewModel : ViewModelBase
         SimStatusText = _sim.IsConnected ? "MSFS: Connected" : "MSFS: Not connected";
     }
 
+    public Airport? GetAirportByIcao(string icao) => _airports.GetByIcao(icao);
+
     public void NotifyAirportDataLoaded()
     {
         AirportDataStatus = $"{_airports.Count:N0} airports loaded";

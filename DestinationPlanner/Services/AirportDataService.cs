@@ -90,8 +90,10 @@ public class AirportDataService : IAirportDataService
 
     private static void ApplyRunwayData(Dictionary<string, Airport> airports, string path)
     {
-        // Track longest runway per airport
-        var longest = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        // OurAirports runways.csv columns:
+        // 0:id, 1:airport_ref, 2:airport_ident, 3:length_ft, 4:width_ft, 5:surface,
+        // 6:lighted, 7:closed, 8:le_ident, ..., 14:he_ident
+        var runwaysByAirport = new Dictionary<string, List<(string ident, int lengthFt)>>(StringComparer.OrdinalIgnoreCase);
 
         using var reader = new StreamReader(path, Encoding.UTF8);
         reader.ReadLine(); // skip header
@@ -100,18 +102,35 @@ public class AirportDataService : IAirportDataService
         while ((line = reader.ReadLine()) is not null)
         {
             var f = SplitCsv(line);
-            if (f.Length < 4) continue;
+            if (f.Length < 9) continue;
 
-            var ident = f[2].Trim();
+            var airportIdent = f[2].Trim();
             if (!int.TryParse(f[3].Trim(), out int lengthFt) || lengthFt <= 0) continue;
 
-            if (!longest.TryGetValue(ident, out int current) || lengthFt > current)
-                longest[ident] = lengthFt;
+            // Skip closed runways
+            if (f[7].Trim() == "1") continue;
+
+            var leIdent = f[8].Trim();
+            var heIdent = f.Length > 14 ? f[14].Trim() : string.Empty;
+            var runwayIdent = string.IsNullOrEmpty(heIdent) ? leIdent : $"{leIdent}/{heIdent}";
+
+            if (!runwaysByAirport.TryGetValue(airportIdent, out var list))
+            {
+                list = [];
+                runwaysByAirport[airportIdent] = list;
+            }
+            list.Add((runwayIdent, lengthFt));
         }
 
-        foreach (var (ident, len) in longest)
-            if (airports.TryGetValue(ident, out var airport))
-                airport.LongestRunwayFt = len;
+        foreach (var (airportIdent, runways) in runwaysByAirport)
+        {
+            if (!airports.TryGetValue(airportIdent, out var airport)) continue;
+            airport.Runways = runways
+                .OrderByDescending(r => r.lengthFt)
+                .Select(r => new Models.Runway { Ident = r.ident, LengthFt = r.lengthFt })
+                .ToList();
+            airport.LongestRunwayFt = airport.Runways[0].LengthFt;
+        }
     }
 
     // airport-frequencies.csv columns: id, airport_ref, airport_ident, type, description, frequency_mhz

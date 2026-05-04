@@ -23,15 +23,17 @@
 ## Done
 
 - [x] **SimConnect integration** — `SimConnectService` connects to MSFS 2024 via `BRAKE PARKING INDICATOR` sim variable. Block-off (brake released) and block-on (brake set) are detected; nearest airport within 15 nm is resolved from the OurAirports data. `FlightCompleted` event flows to `LogbookService.AddFlight()`. App auto-reconnects every 10 s. Connection status shown in the window status bar.
+- [x] **Airport popup with runways and METAR (US16)** — clicking an airport marker opens a popup showing ICAO, name, each individual runway with its length, and live METAR fetched asynchronously from aviationweather.gov.
+- [x] **Two-airport selection with distance line (US17)** — left-click sets primary airport (blue popup), Ctrl+left-click sets secondary (orange popup). A dashed line with distance in nm is drawn between them. Both popups follow the map on pan/zoom.
+- [x] **SimConnect bogus departure fix** — 5-second stabilization window after connection suppresses loading-state jitter (stale coordinates and spurious brake transitions). Non-ICAO identifiers (e.g. `US-12381`) are also excluded from departure/arrival resolution.
 
 ## Bugs / known issues
 
-
-
 ## Wishlist for new features
-- [ ] **Show Metar information on airport tooltip click** - show current METAR information when user clicks a airport marker in addition to ICAO, name, runway length and ILS capability
-- [ ] **Weather overlay on map** - show windbarbs and rain in map if user selects to show weather overlay
-- [ ] **Improve radius view** - when a radius is selected, centre should be highlited somehow and also radius circle could be drawn to map view
-- [ ] **Status bar at the bottom of the scree** - In future status bar should show the connection status to simulator. Also the logbook used should be shown in status bar
-- [ ] **Default logbook** - Usage of the logbook should be improved such a way that program remembers what logbook is used when the program is closed and started again. When the program is started for the first time, it should first ask the user to set the logbook to be used.
-- [ ] **Wildcards support in logbook** - Wildcards should be supported in logbook view with departure and arrival
+- [ ] **Weather overlay on map** — show windbarbs and rain in map if user selects to show weather overlay
+- [ ] **Improve radius view** — when a radius is selected, centre should be highlighted somehow and also a radius circle could be drawn on the map
+- [ ] **Status bar at the bottom of the screen** — connection status to simulator and the active logbook name
+- [ ] **Default logbook** — remember which logbook was used when the program is closed; on first launch, ask the user to set the logbook to be used
+- [ ] **Wildcards support in logbook** — wildcards should be supported in logbook view with departure and arrival filters
+- [ ] **Highlight logbook airports differently** — logbook airports are already orange; consider adding a label or a different shape to distinguish them more clearly at low zoom
+- [ ] **Viewport-based airport count** — status bar currently shows count of all filtered airports; narrow it to only those visible in the current viewport
