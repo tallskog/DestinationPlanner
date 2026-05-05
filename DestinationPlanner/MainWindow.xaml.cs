@@ -14,9 +14,8 @@ public partial class MainWindow : Window
 {
     private DispatcherTimer? _reconnectTimer;
 
-    // Replace OWNER with your GitHub username/organisation after pushing the repo.
     private readonly UpdateManager _updateManager = new(
-        new GithubSource("https://github.com/OWNER/DestinationPlanner", null, false));
+        new GithubSource("https://github.com/tallskog/DestinationPlanner", null, false));
     private UpdateInfo? _pendingUpdate;
 
     public MainWindow(string logbookPath)
