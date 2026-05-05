@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write   # required to create GitHub Releases and upload assets
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk
+
+      - name: Extract version from tag
+        id: ver
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Publish (self-contained win-x64)
+        run: >
+          dotnet publish DestinationPlanner/DestinationPlanner.csproj
+          -c Release -r win-x64 --self-contained
+          /p:Version=${{ steps.ver.outputs.VERSION }}
+          -o publish/
+
+      - name: Download existing Velopack releases (enables delta packages)
+        run: >
+          vpk download github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --outputDir releases/
+
+      - name: Pack with Velopack
+        run: >
+          vpk pack
+          --packId DestinationPlanner
+          --packVersion ${{ steps.ver.outputs.VERSION }}
+          --packDir publish/
+          --outputDir releases/
+
+      - name: Upload to GitHub Release
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --inputDir releases/
+          --tag ${{ github.ref_name }}

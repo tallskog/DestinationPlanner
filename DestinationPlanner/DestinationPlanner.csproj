@@ -6,10 +6,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Mapsui.Wpf" Version="5.0.2" />
+    <PackageReference Include="Velopack" Version="0.0.1298" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,11 +21,17 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Explicit copy target because WPF SDK projects don't reliably process
+  <!-- Explicit copy targets because WPF SDK projects don't reliably process
        CopyToOutputDirectory on None/Content items for native DLLs. -->
   <Target Name="CopySimConnectNative" AfterTargets="Build">
     <Copy SourceFiles="$(ProjectDir)Libs\SimConnect.dll"
           DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"/>
+  </Target>
+
+  <Target Name="CopySimConnectNativePublish" AfterTargets="Publish">
+    <Copy SourceFiles="$(ProjectDir)Libs\SimConnect.dll"
+          DestinationFolder="$(PublishDir)"
           SkipUnchangedFiles="true"/>
   </Target>
 

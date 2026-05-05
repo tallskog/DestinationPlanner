@@ -5,12 +5,19 @@ using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using Velopack;
+using Velopack.Sources;
 
 namespace DestinationPlanner;
 
 public partial class MainWindow : Window
 {
     private DispatcherTimer? _reconnectTimer;
+
+    // Replace OWNER with your GitHub username/organisation after pushing the repo.
+    private readonly UpdateManager _updateManager = new(
+        new GithubSource("https://github.com/OWNER/DestinationPlanner", null, false));
+    private UpdateInfo? _pendingUpdate;
 
     public MainWindow(string logbookPath)
     {
@@ -19,9 +26,59 @@ public partial class MainWindow : Window
         Loaded += MainWindow_Loaded;
     }
 
+    // Silently checks for a new release and downloads it if available.
+    // Shows the status-bar badge when the download is complete.
+    private async Task CheckForUpdatesInBackground()
+    {
+        try
+        {
+            _pendingUpdate = await _updateManager.CheckForUpdatesAsync();
+            if (_pendingUpdate == null) return;
+            await _updateManager.DownloadUpdatesAsync(_pendingUpdate);
+            UpdateBadge.Visibility = Visibility.Visible;
+        }
+        catch { /* update failures are non-fatal */ }
+    }
+
+    private void UpdateBadge_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingUpdate == null) return;
+        _updateManager.ApplyUpdatesAndRestart(_pendingUpdate);
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var update = await _updateManager.CheckForUpdatesAsync();
+            if (update == null)
+            {
+                MessageBox.Show("You are running the latest version.", "Check for Updates",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"Version {update.TargetFullRelease.Version} is available. Download and restart now?",
+                "Update available", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes) return;
+
+            await _updateManager.DownloadUpdatesAsync(update);
+            _updateManager.ApplyUpdatesAndRestart(update);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Update check failed:\n{ex.Message}", "Check for Updates",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     // US13 – auto-load airport data from AppData on startup if files are present
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        _ = CheckForUpdatesInBackground();
+
         string airportsCsv = Path.Combine(AppDataHelper.AppDataPath, "airports.csv");
         if (!File.Exists(airportsCsv)) return;
 

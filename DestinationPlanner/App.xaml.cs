@@ -3,6 +3,7 @@ using DestinationPlanner.Serialization;
 using DestinationPlanner.Views;
 using System.IO;
 using System.Windows;
+using Velopack;
 
 namespace DestinationPlanner;
 
@@ -10,6 +11,9 @@ public partial class App : Application
 {
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Must run before any windows open so Velopack can handle install/uninstall hooks.
+        VelopackApp.Build().Run();
+
         base.OnStartup(e);
 
         // Prevent WPF from shutting down when the logbook-selection dialog closes

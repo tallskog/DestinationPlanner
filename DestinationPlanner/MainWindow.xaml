@@ -12,6 +12,18 @@
             <StatusBarItem>
                 <TextBlock Text="{Binding SimStatus}" FontSize="11"/>
             </StatusBarItem>
+            <StatusBarItem HorizontalAlignment="Right">
+                <Button x:Name="UpdateBadge"
+                        Content="⬆ Update ready — click to restart"
+                        FontSize="11"
+                        Foreground="White"
+                        Background="#1F8B1F"
+                        BorderThickness="0"
+                        Padding="8,2"
+                        Cursor="Hand"
+                        Visibility="Collapsed"
+                        Click="UpdateBadge_Click"/>
+            </StatusBarItem>
         </StatusBar>
 
         <Menu DockPanel.Dock="Top">
@@ -24,6 +36,9 @@
                 <MenuItem Header="Load _Airport Data…"      Click="LoadAirportData_Click"/>
                 <Separator/>
                 <MenuItem Header="E_xit"                    Click="Exit_Click"/>
+            </MenuItem>
+            <MenuItem Header="_Help">
+                <MenuItem Header="Check for _Updates…" Click="CheckForUpdates_Click"/>
             </MenuItem>
         </Menu>
 
