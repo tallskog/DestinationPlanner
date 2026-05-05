@@ -46,6 +46,7 @@ jobs:
           --packVersion ${{ steps.ver.outputs.VERSION }}
           --packDir publish/
           --outputDir releases/
+          --icon DestinationPlanner/DestinationPlanner.ico
 
       - name: Upload to GitHub Release
         run: >

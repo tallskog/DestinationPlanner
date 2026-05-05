@@ -7,11 +7,17 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <Version>1.0.0</Version>
+    <ApplicationIcon>DestinationPlanner.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Mapsui.Wpf" Version="5.0.2" />
     <PackageReference Include="Velopack" Version="0.0.1298" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="DestinationPlanner.ico"/>
+    <Resource Include="DestinationPlanner.png"/>
   </ItemGroup>
 
   <ItemGroup>
