@@ -43,3 +43,5 @@ US17.3: Clicking Ctrl+left mouse again replaces the secondary airport with the n
 US17.4: When two airports are selected, a dashed line is drawn between them on the map with the distance in nautical miles shown at the midpoint.
 US17.5: Both popups are anchored near their respective airport markers and move with the map when the user pans or zooms.
 US17.6: Clicking an empty area on the map closes both popups and clears the selection.
+US17.7: [DONE] Popups should follow the the window focus. If program is minimized, popup should follow. Also if another window is switched on top of this app, popups should not stay on top 
+US17.8: [DONE] If the main app window is moved, popups should follow and be anchored to airport

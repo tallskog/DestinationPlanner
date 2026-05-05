@@ -11,9 +11,11 @@ using MapsuiColor = Mapsui.Styles.Color;
 using MapsuiPen   = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
@@ -49,9 +51,22 @@ public partial class MapView : UserControl
         outline:      new MapsuiColor(140, 50, 0),
         outlineWidth: 1.5f);
 
+    // Tracks whether each popup was open before the window was minimized
+    private bool _primaryWasOpen;
+    private bool _secondaryWasOpen;
+
     // Pre-built WPF brushes used in MakeRunwayTextBlock (avoids per-call allocation)
     private static readonly SolidColorBrush RunwayForeground =
         new(System.Windows.Media.Color.FromRgb(0x44, 0x44, 0x44));
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
+        int X, int Y, int cx, int cy, uint uFlags);
+
+    private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+    private const uint SWP_NOSIZE     = 0x0001;
+    private const uint SWP_NOMOVE     = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
 
     public MapView()
     {
@@ -85,6 +100,57 @@ public partial class MapView : UserControl
         var cy = GeoHelper.LatToMercatorY(50.0);
         map.ViewportInitialized += (_, _) =>
             map.Navigator.CenterOnAndZoomTo(new MPoint(cx, cy), 2_500_000);
+
+        PrimaryPopup.Opened   += (_, _) => RemovePopupTopmost(PrimaryPopup);
+        SecondaryPopup.Opened += (_, _) => RemovePopupTopmost(SecondaryPopup);
+
+        var mainWindow = Window.GetWindow(this);
+        if (mainWindow != null)
+        {
+            mainWindow.StateChanged    += OnMainWindowStateChanged;
+            mainWindow.LocationChanged += OnMainWindowLocationChanged;
+        }
+    }
+
+    private static void RemovePopupTopmost(System.Windows.Controls.Primitives.Popup popup)
+    {
+        if (PresentationSource.FromVisual(popup.Child) is HwndSource src)
+            SetWindowPos(src.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+    }
+
+    private void OnMainWindowStateChanged(object? sender, EventArgs e)
+    {
+        var window = (Window)sender!;
+        if (window.WindowState == WindowState.Minimized)
+        {
+            _primaryWasOpen   = PrimaryPopup.IsOpen;
+            _secondaryWasOpen = SecondaryPopup.IsOpen;
+            PrimaryPopup.IsOpen   = false;
+            SecondaryPopup.IsOpen = false;
+        }
+        else
+        {
+            if (_primaryWasOpen)   PrimaryPopup.IsOpen   = true;
+            if (_secondaryWasOpen) SecondaryPopup.IsOpen = true;
+            _primaryWasOpen   = false;
+            _secondaryWasOpen = false;
+        }
+    }
+
+    private void OnMainWindowLocationChanged(object? sender, EventArgs e)
+    {
+        NudgePopup(PrimaryPopup);
+        NudgePopup(SecondaryPopup);
+    }
+
+    // Forces WPF to recalculate popup screen position after the host window moves.
+    // AllowsTransparency popups don't reposition automatically on window move.
+    private static void NudgePopup(System.Windows.Controls.Primitives.Popup popup)
+    {
+        if (!popup.IsOpen) return;
+        var h = popup.HorizontalOffset;
+        popup.HorizontalOffset = h + 1;
+        popup.HorizontalOffset = h;
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)

@@ -25,6 +25,8 @@
 - [x] **SimConnect integration** — `SimConnectService` connects to MSFS 2024 via `BRAKE PARKING INDICATOR` sim variable. Block-off (brake released) and block-on (brake set) are detected; nearest airport within 15 nm is resolved from the OurAirports data. `FlightCompleted` event flows to `LogbookService.AddFlight()`. App auto-reconnects every 10 s. Connection status shown in the window status bar.
 - [x] **Airport popup with runways and METAR (US16)** — clicking an airport marker opens a popup showing ICAO, name, each individual runway with its length, and live METAR fetched asynchronously from aviationweather.gov.
 - [x] **Two-airport selection with distance line (US17)** — left-click sets primary airport (blue popup), Ctrl+left-click sets secondary (orange popup). A dashed line with distance in nm is drawn between them. Both popups follow the map on pan/zoom.
+- [x] **Popup window focus behaviour (US17.7)** — popups are stripped of `WS_EX_TOPMOST` on open so other windows can cover them; popups hide when the main window minimizes and restore when it is un-minimized.
+- [x] **Popup follows window move (US17.8)** — subscribes to `Window.LocationChanged` and nudges popup offsets to force WPF to reposition the layered popup HWND when the main window is dragged.
 - [x] **SimConnect bogus departure fix** — 5-second stabilization window after connection suppresses loading-state jitter (stale coordinates and spurious brake transitions). Non-ICAO identifiers (e.g. `US-12381`) are also excluded from departure/arrival resolution.
 
 ## Bugs / known issues
