@@ -22,6 +22,8 @@ public class MapViewModel : ViewModelBase
     private bool _showNotVisited = true;
     private string _icaoPrefixes = string.Empty;
     private string _airportDataStatus = "Airport data not loaded";
+    private string _searchText = string.Empty;
+    private IReadOnlyList<Airport> _searchResults = [];
 
     // SimConnect flight status
     private bool   _simConnected;
@@ -53,6 +55,36 @@ public class MapViewModel : ViewModelBase
     {
         get => _airportDataStatus;
         private set => SetField(ref _airportDataStatus, value);
+    }
+
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetField(ref _searchText, value))
+                SearchResults = RunSearch(value);
+        }
+    }
+
+    public IReadOnlyList<Airport> SearchResults
+    {
+        get => _searchResults;
+        private set => SetField(ref _searchResults, value);
+    }
+
+    private IReadOnlyList<Airport> RunSearch(string text)
+    {
+        if (!_airports.IsLoaded || string.IsNullOrWhiteSpace(text))
+            return [];
+        var q = text.Trim();
+        return _airports.GetAll()
+            .Where(a => a.Icao.StartsWith(q, StringComparison.OrdinalIgnoreCase)
+                     || a.Name.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => a.Icao.StartsWith(q, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(a => a.Icao)
+            .Take(20)
+            .ToList();
     }
 
     public ICommand ApplyFiltersCommand { get; }

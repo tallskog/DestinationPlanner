@@ -89,6 +89,9 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
 
 Click **Apply Filters** to update the map. **Clear** resets all filters.
 
+### Airport search
+A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.
+
 ## Project structure
 
 ```

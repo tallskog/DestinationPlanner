@@ -104,6 +104,36 @@ public partial class MapView : UserControl
         PrimaryPopup.Opened   += (_, _) => RemovePopupTopmost(PrimaryPopup);
         SecondaryPopup.Opened += (_, _) => RemovePopupTopmost(SecondaryPopup);
 
+        SearchContainer.IsKeyboardFocusWithinChanged += (_, _) => UpdateSearchDropdownVisibility();
+        SearchResultsList.MouseLeftButtonUp += (_, _) =>
+        {
+            if (SearchResultsList.SelectedItem is Airport a) SelectSearchResult(a);
+        };
+        SearchBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                if (_vm != null) _vm.SearchText = string.Empty;
+                SearchBox.Focus();
+            }
+            else if (e.Key == Key.Down && SearchResultsList.HasItems)
+            {
+                SearchResultsList.SelectedIndex = 0;
+                SearchResultsList.Focus();
+                (SearchResultsList.ItemContainerGenerator.ContainerFromIndex(0) as System.Windows.Controls.ListBoxItem)?.Focus();
+            }
+        };
+        SearchResultsList.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter && SearchResultsList.SelectedItem is Airport a)
+                SelectSearchResult(a);
+            else if (e.Key == Key.Escape)
+            {
+                if (_vm != null) _vm.SearchText = string.Empty;
+                SearchBox.Focus();
+            }
+        };
+
         var mainWindow = Window.GetWindow(this);
         if (mainWindow != null)
         {
@@ -157,6 +187,8 @@ public partial class MapView : UserControl
     {
         if (e.PropertyName is nameof(MapViewModel.FilterCenterIcao) or nameof(MapViewModel.FilterRadiusNm))
             Dispatcher.Invoke(RefreshAirportLayer);
+        else if (e.PropertyName == nameof(MapViewModel.SearchResults))
+            Dispatcher.Invoke(UpdateSearchDropdownVisibility);
     }
 
     // ---- Layer refresh ----
@@ -393,6 +425,34 @@ public partial class MapView : UserControl
 
         Canvas.SetLeft(_selectionDistLabel, (x1 + x2) / 2 - 22);
         Canvas.SetTop(_selectionDistLabel,  (y1 + y2) / 2 - 10);
+    }
+
+    // ---- Search ----
+
+    private void UpdateSearchDropdownVisibility()
+    {
+        SearchDropdown.Visibility =
+            (_vm?.SearchResults.Count > 0 && SearchContainer.IsKeyboardFocusWithin)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+    }
+
+    private void SelectSearchResult(Airport airport)
+    {
+        SearchResultsList.SelectedItem = null;
+        if (_vm != null) _vm.SearchText = string.Empty;
+
+        _primaryAirport   = airport;
+        _secondaryAirport = null;
+        CloseSecondaryPopup();
+        UpdateSelectionLine();
+
+        var cx = GeoHelper.LonToMercatorX(airport.Longitude);
+        var cy = GeoHelper.LatToMercatorY(airport.Latitude);
+        MapCtrl.Map.Navigator.CenterOnAndZoomTo(new MPoint(cx, cy), 1_700);
+
+        OpenPopup(airport, isPrimary: true);
+        SearchBox.Focus();
     }
 
     // ---- Feature factory ----

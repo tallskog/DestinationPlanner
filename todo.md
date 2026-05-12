@@ -27,6 +27,7 @@
 - [x] **Two-airport selection with distance line (US17)** — left-click sets primary airport (blue popup), Ctrl+left-click sets secondary (orange popup). A dashed line with distance in nm is drawn between them. Both popups follow the map on pan/zoom.
 - [x] **Popup window focus behaviour (US17.7)** — popups are stripped of `WS_EX_TOPMOST` on open so other windows can cover them; popups hide when the main window minimizes and restore when it is un-minimized.
 - [x] **Popup follows window move (US17.8)** — subscribes to `Window.LocationChanged` and nudges popup offsets to force WPF to reposition the layered popup HWND when the main window is dragged.
+- [x] **Airport search on map (US18)** — search box overlay (top-right of map) filters all loaded airports by ICAO prefix or name substring on every keystroke, shows a live dropdown of up to 20 results. Selecting an airport zooms the map to a ~3 km wide view and opens the primary popup (ICAO, runways, live METAR) identical to a map click. Keyboard-navigable: Down arrow enters the list, Enter selects, Escape clears.
 - [x] **SimConnect bogus departure fix** — 5-second stabilization window after connection suppresses loading-state jitter (stale coordinates and spurious brake transitions). Non-ICAO identifiers (e.g. `US-12381`) are also excluded from departure/arrival resolution.
 
 ## Bugs / known issues

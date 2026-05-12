@@ -129,6 +129,57 @@
             <Grid>
                 <mapsui:MapControl x:Name="MapCtrl"/>
                 <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False"/>
+
+                <!-- Search box overlay (top-right corner) -->
+                <Grid x:Name="SearchContainer"
+                      VerticalAlignment="Top" HorizontalAlignment="Right"
+                      Margin="0,10,10,0" Width="260">
+                    <StackPanel>
+                        <Grid>
+                            <TextBox x:Name="SearchBox"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="6,4" FontSize="12"
+                                     VerticalContentAlignment="Center"
+                                     Background="White" BorderBrush="#AAAAAA"/>
+                            <TextBlock Text="Search airport…"
+                                       IsHitTestVisible="False"
+                                       Foreground="#BBBBBB" FontStyle="Italic"
+                                       Margin="9,0,0,0" VerticalAlignment="Center" FontSize="12">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SearchText}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <Border x:Name="SearchDropdown"
+                                Background="White" BorderBrush="#AAAAAA" BorderThickness="1,0,1,1"
+                                Visibility="Collapsed" MaxHeight="220">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="6" ShadowDepth="2" Opacity="0.2"/>
+                            </Border.Effect>
+                            <ListBox x:Name="SearchResultsList"
+                                     ItemsSource="{Binding SearchResults}"
+                                     BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock FontSize="11" Margin="0,2">
+                                            <Run FontWeight="SemiBold" Text="{Binding Icao, Mode=OneWay}"/>
+                                            <Run Text=" – "/>
+                                            <Run Foreground="#666666" Text="{Binding Name, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                    </StackPanel>
+                </Grid>
             </Grid>
 
         </DockPanel>

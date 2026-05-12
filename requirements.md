@@ -45,3 +45,8 @@ US17.5: Both popups are anchored near their respective airport markers and move 
 US17.6: Clicking an empty area on the map closes both popups and clears the selection.
 US17.7: [DONE] Popups should follow the the window focus. If program is minimized, popup should follow. Also if another window is switched on top of this app, popups should not stay on top 
 US17.8: [DONE] If the main app window is moved, popups should follow and be anchored to airport
+US18: [DONE] I want to user to have a possibility to use search in map screen
+US18.1: [DONE] User could use ICAO code or airport name as search key
+US18.2: [DONE] Once user starts to enter search key, a list of airports found so far has been shown. List shall be updated after every key entered
+US18.3: [DONE] User will select the airport from the drop down list
+US18.4: [DONE] Once airport is selected, map will center and zoom in for the selected airport
