@@ -8,7 +8,6 @@ public class EditFlightViewModel : ViewModelBase
     private string _blockOffTime = string.Empty;
     private DateTime? _blockOnDate;
     private string _blockOnTime = string.Empty;
-    private AircraftType _aircraftType;
     private string _aircraftModel = string.Empty;
     private string _departureIcao = string.Empty;
     private string _arrivalIcao = string.Empty;
@@ -37,12 +36,6 @@ public class EditFlightViewModel : ViewModelBase
         set { SetField(ref _blockOnTime, value); OnPropertyChanged(nameof(IsValid)); }
     }
 
-    public AircraftType AircraftType
-    {
-        get => _aircraftType;
-        set => SetField(ref _aircraftType, value);
-    }
-
     public string AircraftModel
     {
         get => _aircraftModel;
@@ -60,8 +53,6 @@ public class EditFlightViewModel : ViewModelBase
         get => _arrivalIcao;
         set { SetField(ref _arrivalIcao, value); OnPropertyChanged(nameof(IsValid)); }
     }
-
-    public AircraftType[] AircraftTypeOptions { get; } = [AircraftType.Airplane, AircraftType.Helicopter];
 
     public bool IsValid =>
         BlockOffDate.HasValue &&
@@ -83,7 +74,6 @@ public class EditFlightViewModel : ViewModelBase
         {
             Id            = id,
             Date          = DateOnly.FromDateTime(blockOff),
-            AircraftType  = AircraftType,
             AircraftModel = AircraftModel.Trim(),
             DepartureIcao = DepartureIcao.Trim().ToUpperInvariant(),
             ArrivalIcao   = ArrivalIcao.Trim().ToUpperInvariant(),
@@ -98,7 +88,6 @@ public class EditFlightViewModel : ViewModelBase
         _blockOffTime  = r.BlockOffUtc.ToString("HH:mm"),
         _blockOnDate   = r.BlockOnUtc.Date,
         _blockOnTime   = r.BlockOnUtc.ToString("HH:mm"),
-        _aircraftType  = r.AircraftType,
         _aircraftModel = r.AircraftModel,
         _departureIcao = r.DepartureIcao,
         _arrivalIcao   = r.ArrivalIcao,

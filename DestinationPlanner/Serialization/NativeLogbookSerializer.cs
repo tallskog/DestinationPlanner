@@ -33,7 +33,6 @@ public static class NativeLogbookSerializer
         new(XName.Get("Flight", Ns),
             new XElement(XName.Get("Id", Ns), f.Id),
             new XElement(XName.Get("Date", Ns), f.Date.ToString("yyyy-MM-dd")),
-            new XElement(XName.Get("AircraftType", Ns), f.AircraftType),
             new XElement(XName.Get("AircraftModel", Ns), f.AircraftModel),
             new XElement(XName.Get("DepartureIcao", Ns), f.DepartureIcao),
             new XElement(XName.Get("ArrivalIcao", Ns), f.ArrivalIcao),
@@ -47,7 +46,7 @@ public static class NativeLogbookSerializer
         {
             Id            = Guid.Parse(el.Element(N("Id"))!.Value),
             Date          = DateOnly.ParseExact(el.Element(N("Date"))!.Value, "yyyy-MM-dd"),
-            AircraftType  = Enum.Parse<AircraftType>(el.Element(N("AircraftType"))!.Value),
+            // AircraftType element is silently ignored when present in older files
             AircraftModel = el.Element(N("AircraftModel"))?.Value ?? string.Empty,
             DepartureIcao = el.Element(N("DepartureIcao"))!.Value,
             ArrivalIcao   = el.Element(N("ArrivalIcao"))!.Value,

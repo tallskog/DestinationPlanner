@@ -16,12 +16,18 @@
 
 ## General
 
-- [ ] **Persist last-used logbook path** — auto-load on startup using `Properties.Settings` or a small config file.
+- [ ] **Persist last-used logbook path** — remember which logbook was last active so it reopens automatically on next launch (currently the user must select via File → Open Logbook… each time if there are multiple files).
 - [ ] **Persist airport data path** — same idea; remember the folder so the user doesn't have to browse every time.
 - [ ] **About / help dialog** — links to OurAirports download page and MSFS SDK page.
 
 ## Done
 
+- [x] **Little Navmap CSV import** — "Import Foreign Logbook" auto-detects `.csv` files as Little Navmap exports; parses ISO 8601 timestamps with timezone offset, filters coordinate-only waypoints, cleans raw ATC aircraft names.
+- [x] **AircraftType removed** — `AircraftType` field removed from `FlightRecord` and all UI; old logbook XML files that contain `<AircraftType>` still load correctly (element silently ignored).
+- [x] **Logbook sorted latest-first** — flight list always shows the most recent flight at the top.
+- [x] **Import highlighting** — newly imported rows are highlighted in light green; clears on "Clear Filters" or next launch (session-only, never persisted).
+- [x] **Improved duplicate detection** — catches near-duplicates where time intervals don't overlap but same-day same-route flights have durations within 3 minutes (e.g. backup logbooks with local-time-as-UTC storage).
+- [x] **Runtime logbook selection** — File → Open Logbook… lets users switch the active logbook without restarting.
 - [x] **SimConnect integration** — `SimConnectService` connects to MSFS 2024 via `BRAKE PARKING INDICATOR` sim variable. Block-off (brake released) and block-on (brake set) are detected; nearest airport within 15 nm is resolved from the OurAirports data. `FlightCompleted` event flows to `LogbookService.AddFlight()`. App auto-reconnects every 10 s. Connection status shown in the window status bar.
 - [x] **Airport popup with runways and METAR (US16)** — clicking an airport marker opens a popup showing ICAO, name, each individual runway with its length, and live METAR fetched asynchronously from aviationweather.gov.
 - [x] **Two-airport selection with distance line (US17)** — left-click sets primary airport (blue popup), Ctrl+left-click sets secondary (orange popup). A dashed line with distance in nm is drawn between them. Both popups follow the map on pan/zoom.

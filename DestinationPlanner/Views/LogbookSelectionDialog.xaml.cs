@@ -8,9 +8,11 @@ public partial class LogbookSelectionDialog : Window
 {
     public string? SelectedPath { get; private set; }
 
-    public LogbookSelectionDialog(IReadOnlyList<string> logbookPaths)
+    public LogbookSelectionDialog(IReadOnlyList<string> logbookPaths,
+                                   string description = "Select logbook to open:")
     {
         InitializeComponent();
+        DescriptionText.Text = description;
         // Show only file names in the list but map back to full paths on selection
         LogbookList.ItemsSource = logbookPaths.Select(p => new LogbookItem(p)).ToList();
         LogbookList.SelectedIndex = 0;

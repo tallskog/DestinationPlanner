@@ -15,11 +15,11 @@ public class LogbookViewModel : ViewModelBase
 
     private DateTime? _filterFromDate;
     private DateTime? _filterToDate;
-    private string _filterAircraftTypeString = "All";
     private string _filterDepartureIcao = string.Empty;
     private string _filterArrivalIcao = string.Empty;
     private string _statusText = "No logbook loaded";
     private FlightRecord? _selectedFlight;
+    private IReadOnlySet<Guid> _newlyImportedIds = new HashSet<Guid>();
 
     public DateTime? FilterFromDate
     {
@@ -31,12 +31,6 @@ public class LogbookViewModel : ViewModelBase
     {
         get => _filterToDate;
         set { SetField(ref _filterToDate, value); ApplyFilters(); }
-    }
-
-    public string FilterAircraftTypeString
-    {
-        get => _filterAircraftTypeString;
-        set { SetField(ref _filterAircraftTypeString, value); ApplyFilters(); }
     }
 
     public string FilterDepartureIcao
@@ -63,9 +57,15 @@ public class LogbookViewModel : ViewModelBase
         set => SetField(ref _selectedFlight, value);
     }
 
-    public string[] AircraftTypeOptions { get; } = ["All", "Airplane", "Helicopter"];
+    public IReadOnlySet<Guid> NewlyImportedIds
+    {
+        get => _newlyImportedIds;
+        private set { _newlyImportedIds = value; OnPropertyChanged(); }
+    }
+
     public ObservableCollection<FlightRecord> FilteredFlights { get; } = [];
 
+    public ICommand OpenLogbookCommand { get; }
     public ICommand ImportNativeCommand { get; }
     public ICommand ImportForeignCommand { get; }
     public ICommand ExportCommand { get; }
@@ -78,6 +78,7 @@ public class LogbookViewModel : ViewModelBase
         _logbook = logbook;
         _logbook.FlightsChanged += (_, _) => ApplyFilters();
 
+        OpenLogbookCommand   = new RelayCommand(OpenLogbook);
         ImportNativeCommand  = new RelayCommand(ImportNative);
         ImportForeignCommand = new RelayCommand(ImportForeign);
         ExportCommand        = new RelayCommand(Export, () => _logbook.Flights.Count > 0);
@@ -85,6 +86,28 @@ public class LogbookViewModel : ViewModelBase
         EditFlightCommand    = new RelayCommand(EditFlight,   () => _selectedFlight != null);
         DeleteFlightCommand  = new RelayCommand(DeleteFlight, () => _selectedFlight != null);
 
+        ApplyFilters();
+    }
+
+    private void OpenLogbook()
+    {
+        var files = AppDataHelper.GetLogbookFiles();
+        if (files.Count == 0)
+        {
+            MessageBox.Show("No logbook files found in the application data folder.",
+                            "No Logbooks", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dlg = new LogbookSelectionDialog(files, "Select logbook to open:");
+        dlg.Owner = Application.Current.MainWindow;
+        if (dlg.ShowDialog() != true || dlg.SelectedPath is null) return;
+
+        if (string.Equals(dlg.SelectedPath, _logbook.CurrentFilePath, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        _logbook.Load(dlg.SelectedPath);
+        NewlyImportedIds = new HashSet<Guid>();
         ApplyFilters();
     }
 
@@ -112,13 +135,25 @@ public class LogbookViewModel : ViewModelBase
         var dlg = new OpenFileDialog
         {
             Title  = "Import Foreign Logbook",
-            Filter = "Logbook XML (*.xml)|*.xml|All files (*.*)|*.*"
+            Filter = "Supported logbooks (*.xml;*.csv)|*.xml;*.csv|XML (*.xml)|*.xml|CSV (*.csv)|*.csv|All files (*.*)|*.*"
         };
         if (dlg.ShowDialog() != true) return;
-        int added = _logbook.ImportForeign(dlg.FileName);
-        ApplyFilters();
-        MessageBox.Show($"Imported {added} new flight{(added == 1 ? "" : "s")}.",
-                        "Import complete", MessageBoxButton.OK, MessageBoxImage.Information);
+        try
+        {
+            var before = _logbook.Flights.Select(f => f.Id).ToHashSet();
+            int added  = _logbook.ImportForeign(dlg.FileName);
+            NewlyImportedIds = _logbook.Flights
+                .Select(f => f.Id)
+                .Where(id => !before.Contains(id))
+                .ToHashSet();
+            ApplyFilters();
+            MessageBox.Show($"Imported {added} new flight{(added == 1 ? "" : "s")}.",
+                            "Import complete", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (NotSupportedException ex)
+        {
+            MessageBox.Show(ex.Message, "Unrecognized format", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     // US15.2 – export to user-chosen location (does not affect the auto-save logbook)
@@ -137,18 +172,17 @@ public class LogbookViewModel : ViewModelBase
 
     private void ClearFilters()
     {
-        _filterFromDate            = null;
-        _filterToDate              = null;
-        _filterAircraftTypeString  = "All";
-        _filterDepartureIcao       = string.Empty;
-        _filterArrivalIcao         = string.Empty;
+        _filterFromDate      = null;
+        _filterToDate        = null;
+        _filterDepartureIcao = string.Empty;
+        _filterArrivalIcao   = string.Empty;
 
         OnPropertyChanged(nameof(FilterFromDate));
         OnPropertyChanged(nameof(FilterToDate));
-        OnPropertyChanged(nameof(FilterAircraftTypeString));
         OnPropertyChanged(nameof(FilterDepartureIcao));
         OnPropertyChanged(nameof(FilterArrivalIcao));
 
+        NewlyImportedIds = new HashSet<Guid>();
         ApplyFilters();
     }
 
@@ -185,11 +219,6 @@ public class LogbookViewModel : ViewModelBase
             var to = DateOnly.FromDateTime(_filterToDate.Value);
             results = results.Where(f => f.Date <= to);
         }
-        if (_filterAircraftTypeString != "All" &&
-            Enum.TryParse<AircraftType>(_filterAircraftTypeString, out var type))
-        {
-            results = results.Where(f => f.AircraftType == type);
-        }
         if (!string.IsNullOrWhiteSpace(_filterDepartureIcao))
         {
             var dep = _filterDepartureIcao.Trim().ToUpperInvariant();
@@ -201,7 +230,7 @@ public class LogbookViewModel : ViewModelBase
             results = results.Where(f => f.ArrivalIcao.Contains(arr, StringComparison.OrdinalIgnoreCase));
         }
 
-        var list = results.OrderBy(f => f.BlockOffUtc).ToList();
+        var list = results.OrderByDescending(f => f.BlockOffUtc).ToList();
         FilteredFlights.Clear();
         foreach (var f in list)
             FilteredFlights.Add(f);

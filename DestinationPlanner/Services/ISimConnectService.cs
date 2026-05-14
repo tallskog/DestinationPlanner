@@ -2,7 +2,7 @@ using DestinationPlanner.Models;
 
 namespace DestinationPlanner.Services;
 
-public record FlightStartedEventArgs(string DepartureIcao, DateTime BlockOffUtc, string AircraftModel, AircraftType AircraftType);
+public record FlightStartedEventArgs(string DepartureIcao, DateTime BlockOffUtc, string AircraftModel);
 
 public interface ISimConnectService
 {

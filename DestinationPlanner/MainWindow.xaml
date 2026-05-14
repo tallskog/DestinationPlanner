@@ -29,6 +29,8 @@
 
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
+                <MenuItem Header="_Open Logbook…"           Command="{Binding Logbook.OpenLogbookCommand}"/>
+                <Separator/>
                 <MenuItem Header="_Import Logbook…"         Command="{Binding Logbook.ImportNativeCommand}"/>
                 <MenuItem Header="_Export Logbook…"         Command="{Binding Logbook.ExportCommand}"/>
                 <Separator/>

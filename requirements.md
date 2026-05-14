@@ -50,3 +50,9 @@ US18.1: [DONE] User could use ICAO code or airport name as search key
 US18.2: [DONE] Once user starts to enter search key, a list of airports found so far has been shown. List shall be updated after every key entered
 US18.3: [DONE] User will select the airport from the drop down list
 US18.4: [DONE] Once airport is selected, map will center and zoom in for the selected airport
+US19: [DONE] Application shall support importing logbooks exported from Little Navmap (CSV format) via the existing "Import Foreign Logbook" menu. Format is auto-detected from file extension.
+US20: [DONE] AircraftType (Airplane/Helicopter) shall be removed from the logbook data model. Existing logbook files that contain the element shall load without errors (element silently ignored).
+US21: [DONE] The logbook view shall display the most recent flight at the top (sorted by block-off time descending).
+US22: [DONE] After importing a foreign logbook, newly added rows shall be highlighted in light green in the logbook view. The highlight is session-only (not persisted) and is cleared when the user clicks "Clear Filters".
+US23: [DONE] Duplicate detection during import shall handle the case where the same flight exists with non-overlapping but similar block times (same date, same route, duration within 3 minutes). The original internal logbook entry shall be kept.
+US24: [DONE] User shall be able to switch the active logbook at runtime via File → Open Logbook… without restarting the application.

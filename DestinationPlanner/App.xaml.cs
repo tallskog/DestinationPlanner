@@ -44,7 +44,7 @@ public partial class App : Application
             return files[0];
 
         // US15.3 – ask user which logbook to open
-        var dlg = new LogbookSelectionDialog(files);
+        var dlg = new LogbookSelectionDialog(files, "Multiple logbook files found. Select which one to use:");
         dlg.ShowDialog();
         return dlg.SelectedPath ?? files[0];
     }

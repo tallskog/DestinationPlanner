@@ -25,7 +25,6 @@ public static class ForeignLogbookImporter
             var dateStr      = el.Element("Date")?.Value          ?? string.Empty;
             var depTimeStr   = el.Element("DepartureTime")?.Value  ?? string.Empty;
             var arrTimeStr   = el.Element("ArrivalTime")?.Value    ?? string.Empty;
-            var typeStr      = el.Element("Type")?.Value           ?? string.Empty;
             var aircraftModel = (el.Element("Aircraft")?.Value     ?? string.Empty).Trim();
 
             if (!TryParseDate(dateStr, out var date)) continue;
@@ -36,14 +35,9 @@ public static class ForeignLogbookImporter
             var arrDate  = arrTime < depTime ? date.AddDays(1) : date; // handle midnight crossing
             var blockOn  = DateTime.SpecifyKind(arrDate.ToDateTime(arrTime), DateTimeKind.Local).ToUniversalTime();
 
-            var aircraftType = typeStr.Equals("HELICOPTER", StringComparison.OrdinalIgnoreCase)
-                ? AircraftType.Helicopter
-                : AircraftType.Airplane;
-
             yield return new FlightRecord
             {
                 Date          = date,
-                AircraftType  = aircraftType,
                 AircraftModel = aircraftModel,
                 DepartureIcao = dep,
                 ArrivalIcao   = arr,

@@ -31,10 +31,9 @@ public class SimConnectService : ISimConnectService
     private const int StabilizationSeconds = 5;
     private DateTime _connectedAt;
 
-    private string?      _departureIcao;
-    private DateTime     _blockOffUtc;
-    private string       _aircraftModel = string.Empty;
-    private AircraftType _aircraftType  = AircraftType.Airplane;
+    private string?  _departureIcao;
+    private DateTime _blockOffUtc;
+    private string   _aircraftModel = string.Empty;
 
     public bool IsConnected { get; private set; }
     public event EventHandler<FlightRecord>? FlightCompleted;
@@ -199,9 +198,8 @@ public class SimConnectService : ISimConnectService
                 _departureIcao = NearestIcao(sd.Latitude, sd.Longitude);
                 _blockOffUtc   = DateTime.UtcNow;
                 _aircraftModel = sd.Title?.Trim() ?? string.Empty;
-                _aircraftType  = InferAircraftType(_aircraftModel);
                 FlightStarted?.Invoke(this, new FlightStartedEventArgs(
-                    _departureIcao ?? "Unknown", _blockOffUtc, _aircraftModel, _aircraftType));
+                    _departureIcao ?? "Unknown", _blockOffUtc, _aircraftModel));
             }
         }
         else if (_inFlight && !_lastBrake && brakeOn)
@@ -217,7 +215,6 @@ public class SimConnectService : ISimConnectService
                 FlightCompleted?.Invoke(this, new FlightRecord
                 {
                     Date          = DateOnly.FromDateTime(DateTime.UtcNow),
-                    AircraftType  = _aircraftType,
                     AircraftModel = _aircraftModel,
                     DepartureIcao = _departureIcao,
                     ArrivalIcao   = arrivalIcao,
@@ -233,22 +230,6 @@ public class SimConnectService : ISimConnectService
         }
 
         _lastBrake = brakeOn;
-    }
-
-    // Infers airplane vs helicopter from the aircraft title reported by the sim.
-    // Matches common Asobo/MSFS helicopter model names; everything else is Airplane.
-    private static AircraftType InferAircraftType(string title)
-    {
-        if (string.IsNullOrEmpty(title)) return AircraftType.Airplane;
-        var t = title.ToUpperInvariant();
-        return t.Contains("HELICOPTER")
-            || t.Contains(" H125") || t.Contains(" H135") || t.Contains(" H145")
-            || t.Contains("ROBINSON R")
-            || t.Contains("BELL 206") || t.Contains("BELL 407") || t.Contains("BELL 412") || t.Contains("BELL 429")
-            || t.Contains("CABRI")
-            || t.Contains("GUIMBAL")
-            ? AircraftType.Helicopter
-            : AircraftType.Airplane;
     }
 
     // Returns the ICAO of the nearest airport within 15 nm, or null if none found.

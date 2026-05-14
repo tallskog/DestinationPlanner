@@ -21,22 +21,17 @@
 
   <xs:complexType name="FlightType">
     <xs:sequence>
-      <xs:element name="Id"               type="xs:string"/>   <!-- UUID -->
-      <xs:element name="Date"             type="xs:date"/>     <!-- YYYY-MM-DD -->
-      <xs:element name="AircraftType"     type="tns:AircraftTypeEnum"/>
-      <xs:element name="DepartureIcao"    type="tns:IcaoCode"/>
-      <xs:element name="ArrivalIcao"      type="tns:IcaoCode"/>
-      <xs:element name="BlockOffUtc"      type="xs:dateTime"/> <!-- parking-brake release -->
-      <xs:element name="BlockOnUtc"       type="xs:dateTime"/> <!-- parking-brake set on arrival -->
+      <xs:element name="Id"            type="xs:string"/>   <!-- UUID -->
+      <xs:element name="Date"          type="xs:date"/>     <!-- YYYY-MM-DD -->
+      <!-- AircraftType element accepted but ignored for backward compatibility -->
+      <xs:element name="AircraftType"  type="xs:string" minOccurs="0"/>
+      <xs:element name="AircraftModel" type="xs:string" minOccurs="0"/>
+      <xs:element name="DepartureIcao" type="tns:IcaoCode"/>
+      <xs:element name="ArrivalIcao"   type="tns:IcaoCode"/>
+      <xs:element name="BlockOffUtc"   type="xs:dateTime"/> <!-- parking-brake release -->
+      <xs:element name="BlockOnUtc"    type="xs:dateTime"/> <!-- parking-brake set on arrival -->
     </xs:sequence>
   </xs:complexType>
-
-  <xs:simpleType name="AircraftTypeEnum">
-    <xs:restriction base="xs:string">
-      <xs:enumeration value="Airplane"/>
-      <xs:enumeration value="Helicopter"/>
-    </xs:restriction>
-  </xs:simpleType>
 
   <xs:simpleType name="IcaoCode">
     <xs:restriction base="xs:string">

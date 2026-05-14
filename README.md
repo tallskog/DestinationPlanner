@@ -5,9 +5,12 @@ A Windows desktop application for Microsoft Flight Simulator 2024 that combines 
 ## Features
 
 - **Live flight recording** — connects to MSFS 2024 via SimConnect and captures each flight (parking brake release → set) automatically
-- **Flight logbook** — view, filter and import your flight history; supports a native XML format and a foreign XML import format
+- **Flight logbook** — view, filter, edit, and manage your flight history; supports a native XML format, a foreign XML import format, and Little Navmap CSV export files
+- **Import highlighting** — newly imported flights are highlighted in light green; clears on "Clear Filters" or next launch
+- **Smart duplicate detection** — prevents double entries even when times differ slightly (minute-precision imports vs. second-precision live recordings) or when the same flight appears with a time offset but matching duration
 - **Interactive map** — OpenStreetMap tiles with zoom and pan; airport markers filtered by runway length, ILS capability, or radius from a centre airport
 - **Logbook airports on map** — airports you have flown to/from are highlighted in a different colour
+- **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**
 
 ## Prerequisites
 
@@ -75,10 +78,15 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
 2. Open the app — it will connect automatically once you are on the apron
 3. Releasing the parking brake starts the recording; setting it again on arrival saves the flight
 
-### Importing an existing logbook
-- **File → Open Logbook…** — open a previously saved native logbook (`.xml`)
-- **File → Save Logbook…** — save the current logbook
-- **File → Import Foreign Logbook…** — import the `ArrayOfFlightRecord` XML format produced by other flight logbook applications (duplicates are filtered automatically)
+### Managing logbooks
+- **File → Open Logbook…** — switch to a different logbook file at any time without restarting
+- **File → Import Logbook…** — import a native logbook into a new file in AppData
+- **File → Export Logbook…** — save the current logbook to a user-chosen location
+- **File → Import Foreign Logbook…** — merge flights from an external source into the active logbook; supports:
+  - `ArrayOfFlightRecord` XML (produced by other flight logbook applications)
+  - Little Navmap CSV logbook export (`.csv`)
+  
+  Duplicates are filtered automatically. The file format is detected from the extension. Newly added flights are highlighted in light green; click **Clear Filters** to remove the highlight.
 
 ### Map filters
 | Filter | Description |
@@ -96,13 +104,14 @@ A search box is shown in the top-right corner of the map. Type an ICAO code or a
 
 ```
 DestinationPlanner/
-├── Models/          FlightRecord, Airport, AircraftType
+├── Converters/      WPF value converters (SetContainsConverter)
+├── Models/          FlightRecord, Airport
 ├── ViewModels/      MainViewModel, MapViewModel, LogbookViewModel
-├── Views/           MapView.xaml, LogbookView.xaml
+├── Views/           MapView.xaml, LogbookView.xaml, LogbookSelectionDialog.xaml
 ├── Services/        LogbookService, AirportDataService, SimConnectService
-├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter
+├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter, LittleNavmapCsvImporter
 ├── Schemas/         NativeLogbook.xsd, ForeignLogbook.xsd
-└── Helpers/         GeoHelper, RelayCommand
+└── Helpers/         GeoHelper, RelayCommand, AppDataHelper
 ```
 
 ## Native logbook XML format
@@ -116,7 +125,7 @@ Namespace: `urn:destination-planner:logbook:v1`
     <Flight>
       <Id>3fa85f64-5717-4562-b3fc-2c963f66afa6</Id>
       <Date>2026-04-26</Date>
-      <AircraftType>Airplane</AircraftType>
+      <AircraftModel>Airbus A320</AircraftModel>
       <DepartureIcao>EGLL</DepartureIcao>
       <ArrivalIcao>EGCC</ArrivalIcao>
       <BlockOffUtc>2026-04-26T10:30:00Z</BlockOffUtc>
