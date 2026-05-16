@@ -1,4 +1,5 @@
 using DestinationPlanner.Services;
+using System.Windows;
 
 namespace DestinationPlanner.ViewModels;
 
@@ -18,7 +19,17 @@ public class MainViewModel : ViewModelBase
     public MainViewModel(string logbookPath)
     {
         var logbook = new LogbookService();
-        logbook.Load(logbookPath);
+        try
+        {
+            logbook.Load(logbookPath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Could not load logbook:\n{ex.Message}\n\nStarting with an empty logbook. " +
+                "The file may have been saved by a newer version of DestinationPlanner.",
+                "Logbook Load Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
 
         AirportData = new AirportDataService();
 

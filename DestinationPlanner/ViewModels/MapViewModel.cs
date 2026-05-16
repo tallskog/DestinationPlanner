@@ -25,6 +25,11 @@ public class MapViewModel : ViewModelBase
     private string _searchText = string.Empty;
     private IReadOnlyList<Airport> _searchResults = [];
 
+    // Aircraft position (updated every SimConnect frame)
+    private double _aircraftLat;
+    private double _aircraftLon;
+    private double _aircraftHeading;
+
     // SimConnect flight status
     private bool   _simConnected;
     private string _simStatusText = "MSFS: Not connected";
@@ -93,6 +98,7 @@ public class MapViewModel : ViewModelBase
     // The view subscribes to these to know when to refresh layers.
     public event EventHandler? FiltersApplied;
     public event EventHandler? LogbookChanged;
+    public event EventHandler<AircraftPositionEventArgs>? AircraftMoved;
 
     public MapViewModel(IAirportDataService airports, ILogbookService logbook, ISimConnectService sim)
     {
@@ -108,6 +114,7 @@ public class MapViewModel : ViewModelBase
         _sim.FlightStarted     += OnFlightStarted;
         _sim.OnGroundChanged   += OnOnGroundChanged;
         _sim.FlightCompleted   += OnFlightCompleted;
+        _sim.PositionChanged   += OnPositionChanged;
 
         // Reflect initial connection state.
         SimConnected  = _sim.IsConnected;
@@ -225,6 +232,14 @@ public class MapViewModel : ViewModelBase
         FiltersApplied?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnPositionChanged(object? sender, AircraftPositionEventArgs e)
+    {
+        _aircraftLat     = e.Latitude;
+        _aircraftLon     = e.Longitude;
+        _aircraftHeading = e.HeadingDegrees;
+        AircraftMoved?.Invoke(this, e);
+    }
+
     private void OnSimConnectionChanged(object? sender, EventArgs e)
     {
         SimConnected  = _sim.IsConnected;
@@ -238,6 +253,9 @@ public class MapViewModel : ViewModelBase
             _blockOnZulu   = string.Empty;
             _aircraftModel = string.Empty;
             UpdateFlightInfoText();
+            // Fire AircraftMoved so the view hides the marker.
+            AircraftMoved?.Invoke(this, new AircraftPositionEventArgs(
+                _aircraftLat, _aircraftLon, _aircraftHeading));
         }
     }
 

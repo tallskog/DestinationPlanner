@@ -6,7 +6,11 @@ public static class AppDataHelper
 {
     private static readonly string _appDataPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+#if DEBUG
+        "DestinationPlanner-dev");
+#else
         "DestinationPlanner");
+#endif
 
     public static string AppDataPath => _appDataPath;
 

@@ -35,26 +35,41 @@ public class SimConnectService : ISimConnectService
     private DateTime _blockOffUtc;
     private string   _aircraftModel = string.Empty;
 
+    // Captured at touchdown; carried into the FlightRecord when flight completes.
+    private LandingStats? _lastLandingStats;
+
     public bool IsConnected { get; private set; }
     public event EventHandler<FlightRecord>? FlightCompleted;
     public event EventHandler<FlightStartedEventArgs>? FlightStarted;
     public event EventHandler<bool>? OnGroundChanged;
     public event EventHandler? ConnectionChanged;
+    public event EventHandler<AircraftPositionEventArgs>? PositionChanged;
 
     // SimConnect data-definition / request enums.
     private enum Defs { SimData }
     private enum Reqs { SimData }
 
+    // Field order must match AddToDataDefinition call order exactly (Pack=1, Sequential).
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
     private struct SimData
     {
-        public double Latitude;    // PLANE LATITUDE,          degrees
-        public double Longitude;   // PLANE LONGITUDE,         degrees
-        public int    ParkingBrake;// BRAKE PARKING INDICATOR, Bool (0/1)
-        public int    OnGround;    // SIM ON GROUND,           Bool (0/1)
+        public double Latitude;         // PLANE LATITUDE,           degrees
+        public double Longitude;        // PLANE LONGITUDE,          degrees
+        public double HeadingDegrees;   // PLANE HEADING DEGREES TRUE, degrees
+        public double VerticalSpeed;    // VERTICAL SPEED,           feet/min (negative = descent)
+        public double GForce;           // G FORCE,                  ratio (1.0 = 1g)
+        public double AirspeedIndicated;// AIRSPEED INDICATED,       knots
+        public double WindVelocity;     // AMBIENT WIND VELOCITY,    knots
+        public double WindDirection;    // AMBIENT WIND DIRECTION,   degrees true
+        public int    ParkingBrake;     // BRAKE PARKING INDICATOR,  Bool (0/1)
+        public int    OnGround;         // SIM ON GROUND,            Bool (0/1)
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-        public string Title;       // TITLE,                   aircraft name
+        public string Title;            // TITLE,                    aircraft name
     }
+
+    private record LandingStats(
+        double Fpm, double GForce, double AirspeedKts,
+        double WindKts, double WindDirection);
 
     public SimConnectService(IAirportDataService airports) => _airports = airports;
 
@@ -77,11 +92,18 @@ public class SimConnectService : ISimConnectService
             _sc.OnRecvException      += OnException;
             _sc.OnRecvSimobjectData  += OnSimobjectData;
 
-            _sc.AddToDataDefinition(Defs.SimData, "PLANE LATITUDE",          "degrees", SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
-            _sc.AddToDataDefinition(Defs.SimData, "PLANE LONGITUDE",         "degrees", SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
-            _sc.AddToDataDefinition(Defs.SimData, "BRAKE PARKING INDICATOR", "Bool",    SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
-            _sc.AddToDataDefinition(Defs.SimData, "SIM ON GROUND",           "Bool",    SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
-            _sc.AddToDataDefinition(Defs.SimData, "TITLE",                   null,      SIMCONNECT_DATATYPE.STRING256, 0f, SimConnect.SIMCONNECT_UNUSED);
+            // Order must match SimData field order exactly.
+            _sc.AddToDataDefinition(Defs.SimData, "PLANE LATITUDE",            "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "PLANE LONGITUDE",           "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "PLANE HEADING DEGREES TRUE","degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "VERTICAL SPEED",            "feet/minute",SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "G FORCE",                   "gforce",     SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "AIRSPEED INDICATED",        "knots",      SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "AMBIENT WIND VELOCITY",     "knots",      SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "AMBIENT WIND DIRECTION",    "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "BRAKE PARKING INDICATOR",   "Bool",       SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "SIM ON GROUND",             "Bool",       SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "TITLE",                     null,         SIMCONNECT_DATATYPE.STRING256, 0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.RegisterDataDefineStruct<SimData>(Defs.SimData);
 
             _sc.RequestDataOnSimObject(
@@ -129,21 +151,23 @@ public class SimConnectService : ISimConnectService
 
     private void OnOpen(SimConnect sender, SIMCONNECT_RECV_OPEN data)
     {
-        _initialized   = false;
-        _inFlight      = false;
-        _lastOnGround  = true;
-        _departureIcao = null;
-        _aircraftModel = string.Empty;
-        _connectedAt   = DateTime.UtcNow;
+        _initialized      = false;
+        _inFlight         = false;
+        _lastOnGround     = true;
+        _departureIcao    = null;
+        _aircraftModel    = string.Empty;
+        _lastLandingStats = null;
+        _connectedAt      = DateTime.UtcNow;
         SetConnected(true);
     }
 
     private void OnQuit(SimConnect sender, SIMCONNECT_RECV data)
     {
-        _inFlight      = false;
-        _initialized   = false;
-        _departureIcao = null;
-        _aircraftModel = string.Empty;
+        _inFlight         = false;
+        _initialized      = false;
+        _departureIcao    = null;
+        _aircraftModel    = string.Empty;
+        _lastLandingStats = null;
         CleanupSimConnect();
         SetConnected(false);
     }
@@ -158,7 +182,7 @@ public class SimConnectService : ISimConnectService
         if (data.dwRequestID != (uint)Reqs.SimData) return;
 
         var sd       = (SimData)data.dwData[0];
-        bool brakeOn = sd.ParkingBrake != 0;
+        bool brakeOn  = sd.ParkingBrake != 0;
         bool onGround = sd.OnGround != 0;
 
         if (!_initialized)
@@ -180,8 +204,23 @@ public class SimConnectService : ISimConnectService
             return;
         }
 
+        // Always broadcast position so the map marker stays current.
+        PositionChanged?.Invoke(this, new AircraftPositionEventArgs(
+            sd.Latitude, sd.Longitude, sd.HeadingDegrees));
+
         if (onGround != _lastOnGround)
         {
+            // Capture landing stats at the moment of touchdown.
+            if (onGround && _inFlight)
+            {
+                _lastLandingStats = new LandingStats(
+                    Fpm:          sd.VerticalSpeed,
+                    GForce:       sd.GForce,
+                    AirspeedKts:  sd.AirspeedIndicated,
+                    WindKts:      sd.WindVelocity,
+                    WindDirection:sd.WindDirection);
+            }
+
             _lastOnGround = onGround;
             OnGroundChanged?.Invoke(this, onGround);
         }
@@ -214,15 +253,21 @@ public class SimConnectService : ISimConnectService
                 // Arrived at a different airport — flight complete, reset for the next one.
                 FlightCompleted?.Invoke(this, new FlightRecord
                 {
-                    Date          = DateOnly.FromDateTime(DateTime.UtcNow),
-                    AircraftModel = _aircraftModel,
-                    DepartureIcao = _departureIcao,
-                    ArrivalIcao   = arrivalIcao,
-                    BlockOffUtc   = _blockOffUtc,
-                    BlockOnUtc    = blockOnUtc,
+                    Date                = DateOnly.FromDateTime(DateTime.UtcNow),
+                    AircraftModel       = _aircraftModel,
+                    DepartureIcao       = _departureIcao,
+                    ArrivalIcao         = arrivalIcao,
+                    BlockOffUtc         = _blockOffUtc,
+                    BlockOnUtc          = blockOnUtc,
+                    LandingFpm          = _lastLandingStats?.Fpm,
+                    LandingGForce       = _lastLandingStats?.GForce,
+                    LandingAirspeedKts  = _lastLandingStats?.AirspeedKts,
+                    LandingWindKts      = _lastLandingStats?.WindKts,
+                    LandingWindDirection= _lastLandingStats?.WindDirection,
                 });
-                _departureIcao = null;
-                _aircraftModel = string.Empty;
+                _departureIcao    = null;
+                _aircraftModel    = string.Empty;
+                _lastLandingStats = null;
             }
             // Same airport: keep _departureIcao locked so the next release inherits it.
 

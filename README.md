@@ -93,9 +93,12 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
 |---|---|
 | Min / Max runway | Minimum and maximum runway length (ft or m) |
 | Instrument approach | Show only airports with ILS or equivalent |
+| ATIS | Show only airports that have ATIS |
+| Show visited / not-visited | Toggle airports you have or have not flown to/from |
 | Centre ICAO + Radius | Show only airports within N nm of the given airport |
+| ICAO prefixes | Comma-separated prefixes to restrict by country or region (e.g. `EF,ES`) |
 
-Click **Apply Filters** to update the map. **Clear** resets all filters.
+Click **Apply Filters** to update the map. **Clear** resets all filters to their defaults.
 
 ### Airport search
 A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.

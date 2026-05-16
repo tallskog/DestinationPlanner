@@ -23,11 +23,18 @@ namespace DestinationPlanner.Views;
 
 public partial class MapView : UserControl
 {
+    private bool _initialized;
     private MapViewModel? _vm;
     private MemoryLayer? _airportLayer;
     private MemoryLayer? _logbookLayer;
     private int _airportCount;
     private int _logbookCount;
+
+    // Live aircraft position marker
+    private TextBlock? _aircraftMarker;
+    private RotateTransform? _aircraftRotate;
+    private double _aircraftLat;
+    private double _aircraftLon;
 
     private Airport? _primaryAirport;
     private Airport? _secondaryAirport;
@@ -55,6 +62,10 @@ public partial class MapView : UserControl
     private bool _primaryWasOpen;
     private bool _secondaryWasOpen;
 
+    // Tracks whether each popup was open before a tab switch
+    private bool _tabPrimaryWasOpen;
+    private bool _tabSecondaryWasOpen;
+
     // Pre-built WPF brushes used in MakeRunwayTextBlock (avoids per-call allocation)
     private static readonly SolidColorBrush RunwayForeground =
         new(System.Windows.Media.Color.FromRgb(0x44, 0x44, 0x44));
@@ -71,17 +82,45 @@ public partial class MapView : UserControl
     public MapView()
     {
         InitializeComponent();
-        Loaded += OnLoaded;
+        Loaded   += OnLoaded;
+        Unloaded += OnUnloaded;
+    }
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        _tabPrimaryWasOpen   = PrimaryPopup.IsOpen;
+        _tabSecondaryWasOpen = SecondaryPopup.IsOpen;
+        PrimaryPopup.IsOpen   = false;
+        SecondaryPopup.IsOpen = false;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (_initialized)
+        {
+            if (_tabPrimaryWasOpen && _primaryAirport != null)
+            {
+                SetPopupPosition(PrimaryPopup, _primaryAirport);
+                PrimaryPopup.IsOpen = true;
+            }
+            if (_tabSecondaryWasOpen && _secondaryAirport != null)
+            {
+                SetPopupPosition(SecondaryPopup, _secondaryAirport);
+                SecondaryPopup.IsOpen = true;
+            }
+            _tabPrimaryWasOpen   = false;
+            _tabSecondaryWasOpen = false;
+            return;
+        }
+        _initialized = true;
+
         _vm = DataContext as MapViewModel;
         if (_vm is null) return;
 
         _vm.FiltersApplied += (_, _) => Dispatcher.Invoke(() => { RefreshAirportLayer(); RefreshLogbookLayer(); });
         _vm.LogbookChanged += (_, _) => Dispatcher.Invoke(RefreshLogbookLayer);
         _vm.PropertyChanged += OnVmPropertyChanged;
+        _vm.AircraftMoved  += (_, e) => Dispatcher.Invoke(() => UpdateAircraftMarker(e));
         MapCtrl.Info += OnMapInfo;
 
         _airportLayer = new MemoryLayer { Name = "Airports", Style = AirportStyle };
@@ -93,6 +132,20 @@ public partial class MapView : UserControl
         map.Layers.Add(_logbookLayer);
 
         MapCtrl.Map = map;
+
+        // Aircraft position marker — WPF overlay so it isn't part of Mapsui's layer system.
+        _aircraftRotate = new RotateTransform();
+        _aircraftMarker = new TextBlock
+        {
+            Text                  = "✈",
+            FontSize              = 22,
+            Foreground            = new SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 100, 220)),
+            RenderTransform       = _aircraftRotate,
+            RenderTransformOrigin = new System.Windows.Point(0.5, 0.5),
+            Visibility            = Visibility.Collapsed,
+            IsHitTestVisible      = false,
+        };
+        SelectionOverlay.Children.Add(_aircraftMarker);
 
         map.Navigator.ViewportChanged += (_, _) => Dispatcher.Invoke(OnViewportChanged);
 
@@ -349,6 +402,7 @@ public partial class MapView : UserControl
         if (_primaryAirport  != null && PrimaryPopup.IsOpen)   SetPopupPosition(PrimaryPopup,   _primaryAirport);
         if (_secondaryAirport != null && SecondaryPopup.IsOpen) SetPopupPosition(SecondaryPopup, _secondaryAirport);
         UpdateSelectionLinePositions();
+        RepositionAircraftMarker();
     }
 
     private void SetPopupPosition(System.Windows.Controls.Primitives.Popup popup, Airport airport)
@@ -453,6 +507,31 @@ public partial class MapView : UserControl
 
         OpenPopup(airport, isPrimary: true);
         SearchBox.Focus();
+    }
+
+    // ---- Aircraft marker ----
+
+    private void UpdateAircraftMarker(AircraftPositionEventArgs e)
+    {
+        if (_aircraftMarker is null || _aircraftRotate is null || _vm is null) return;
+
+        _aircraftLat = e.Latitude;
+        _aircraftLon = e.Longitude;
+        _aircraftRotate.Angle = e.HeadingDegrees;
+
+        _aircraftMarker.Visibility = _vm.SimConnected ? Visibility.Visible : Visibility.Collapsed;
+        RepositionAircraftMarker();
+    }
+
+    private void RepositionAircraftMarker()
+    {
+        if (_aircraftMarker is null || _aircraftMarker.Visibility != Visibility.Visible) return;
+
+        var (sx, sy) = MercatorToScreen(
+            GeoHelper.LonToMercatorX(_aircraftLon),
+            GeoHelper.LatToMercatorY(_aircraftLat));
+        Canvas.SetLeft(_aircraftMarker, sx - 11);
+        Canvas.SetTop(_aircraftMarker,  sy - 11);
     }
 
     // ---- Feature factory ----

@@ -101,6 +101,18 @@
                 <DataGridTextColumn Header="Duration"
                                     Binding="{Binding BlockTime, StringFormat='{}{0:h\\:mm}'}"
                                     Width="75"/>
+                <DataGridTextColumn Header="FPM"
+                                    Binding="{Binding LandingFpmDisplay}"
+                                    Width="65"/>
+                <DataGridTextColumn Header="G"
+                                    Binding="{Binding LandingGDisplay}"
+                                    Width="50"/>
+                <DataGridTextColumn Header="Spd"
+                                    Binding="{Binding LandingAirspeedDisplay}"
+                                    Width="60"/>
+                <DataGridTextColumn Header="Wind"
+                                    Binding="{Binding LandingWindDisplay}"
+                                    Width="85"/>
             </DataGrid.Columns>
         </DataGrid>
 
