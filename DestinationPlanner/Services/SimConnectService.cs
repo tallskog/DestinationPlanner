@@ -38,6 +38,10 @@ public class SimConnectService : ISimConnectService
     // Captured at touchdown; carried into the FlightRecord when flight completes.
     private LandingStats? _lastLandingStats;
 
+    // Rolling window of recent FPM/G-force samples used to find the peak at touchdown.
+    private readonly Queue<(double Fpm, double GForce, DateTime Time)> _landingWindow = new();
+    private const int LandingWindowSeconds = 5;
+
     public bool IsConnected { get; private set; }
     public event EventHandler<FlightRecord>? FlightCompleted;
     public event EventHandler<FlightStartedEventArgs>? FlightStarted;
@@ -157,6 +161,7 @@ public class SimConnectService : ISimConnectService
         _departureIcao    = null;
         _aircraftModel    = string.Empty;
         _lastLandingStats = null;
+        _landingWindow.Clear();
         _connectedAt      = DateTime.UtcNow;
         SetConnected(true);
     }
@@ -168,6 +173,7 @@ public class SimConnectService : ISimConnectService
         _departureIcao    = null;
         _aircraftModel    = string.Empty;
         _lastLandingStats = null;
+        _landingWindow.Clear();
         CleanupSimConnect();
         SetConnected(false);
     }
@@ -208,14 +214,32 @@ public class SimConnectService : ISimConnectService
         PositionChanged?.Invoke(this, new AircraftPositionEventArgs(
             sd.Latitude, sd.Longitude, sd.HeadingDegrees));
 
+        // Maintain rolling window so touchdown capture sees the actual impact peak,
+        // not a decayed value from up to 1 second after ground contact.
+        var now = DateTime.UtcNow;
+        _landingWindow.Enqueue((sd.VerticalSpeed, sd.GForce, now));
+        while (_landingWindow.Count > 0 &&
+               (now - _landingWindow.Peek().Time).TotalSeconds > LandingWindowSeconds)
+            _landingWindow.Dequeue();
+
         if (onGround != _lastOnGround)
         {
             // Capture landing stats at the moment of touchdown.
             if (onGround && _inFlight)
             {
+                // Scan the window for the worst FPM (most negative) and peak G-force.
+                // With 1 Hz polling the transition frame may be up to 1 s after
+                // actual impact; the window includes the pre-impact frames.
+                double worstFpm   = sd.VerticalSpeed;
+                double peakGForce = sd.GForce;
+                foreach (var (fpm, g, _) in _landingWindow)
+                {
+                    if (fpm < worstFpm)   worstFpm   = fpm;
+                    if (g   > peakGForce) peakGForce = g;
+                }
                 _lastLandingStats = new LandingStats(
-                    Fpm:          sd.VerticalSpeed,
-                    GForce:       sd.GForce,
+                    Fpm:          worstFpm,
+                    GForce:       peakGForce,
                     AirspeedKts:  sd.AirspeedIndicated,
                     WindKts:      sd.WindVelocity,
                     WindDirection:sd.WindDirection);

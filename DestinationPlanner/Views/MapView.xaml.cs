@@ -427,7 +427,8 @@ public partial class MapView : UserControl
 
     private void UpdateSelectionLine()
     {
-        SelectionOverlay.Children.Clear();
+        if (_selectionLine != null) SelectionOverlay.Children.Remove(_selectionLine);
+        if (_selectionDistLabel != null) SelectionOverlay.Children.Remove(_selectionDistLabel);
         _selectionLine = null;
         _selectionDistLabel = null;
 
