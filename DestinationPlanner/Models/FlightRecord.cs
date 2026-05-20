@@ -19,6 +19,15 @@ public class FlightRecord
     public double? LandingWindKts       { get; set; }
     public double? LandingWindDirection { get; set; }
 
+    // Extended landing stats — null for pre-v1.2 logbook entries.
+    public double? LandingHeadingDeg            { get; set; }
+    public double? LandingBankAngleDeg          { get; set; }
+    public double? LandingPitchAngleDeg         { get; set; }
+    public double? LandingCrosswindKts          { get; set; }
+    public double? LandingCenterlineDeviationFt { get; set; }
+    public double? LandingTouchdownZonePct      { get; set; }
+    public int?    LandingStars                 { get; set; }
+
     public string LandingFpmDisplay =>
         LandingFpm.HasValue ? $"{LandingFpm.Value:+0;-0;0}" : "—";
     public string LandingGDisplay =>
@@ -29,4 +38,6 @@ public class FlightRecord
         (LandingWindKts.HasValue && LandingWindDirection.HasValue)
             ? $"{LandingWindKts.Value:F0}kt/{LandingWindDirection.Value:F0}°"
             : "—";
+    public string LandingStarsDisplay =>
+        LandingStars.HasValue ? new string('★', LandingStars.Value) + new string('☆', 5 - LandingStars.Value) : "—";
 }

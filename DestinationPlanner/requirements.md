@@ -68,3 +68,20 @@
 - Spd shows indicated airspeed as e.g. `134kt`
 - Wind shows wind as e.g. `12kt/270°`
 - When a flight has no landing data, all four columns show `—`
+
+---
+
+## US22: Landing quality rating
+**As a pilot**, I want each flight to display a 1–5 star landing quality rating so I can quickly assess and compare my landings.
+
+**Acceptance criteria:**
+- After a flight completes, the logbook shows a star rating (★★★★☆ style) in a "Rating" column
+- The rating is a composite of six factors: vertical speed, G-force, bank angle at touchdown, pitch at touchdown, centerline deviation, and touchdown zone accuracy (first third of runway)
+- Bank angle and pitch are captured via two new SimConnect variables (`PLANE BANK DEGREES`, `PLANE PITCH DEGREES`)
+- Centerline deviation is computed from the touchdown lat/lon vs. the nearest runway centerline using OurAirports `runways.csv` endpoint data
+- Touchdown zone accuracy is the along-track distance from the threshold expressed as a percentage of runway length; landing in the first 33% scores highest
+- Score → stars: ≥85→5, ≥70→4, ≥50→3, ≥30→2, else 1
+- If a component is unavailable (e.g. no runway data), its weight is redistributed among available components
+- All new fields (`LandingHeadingDeg`, `LandingBankAngleDeg`, `LandingPitchAngleDeg`, `LandingCrosswindKts`, `LandingCenterlineDeviationFt`, `LandingTouchdownZonePct`, `LandingStars`) are persisted in the XML logbook (schema v1.2) using the omit-if-null pattern
+- Pre-v1.2 logbook files open without error; the Rating column shows `—` for those flights
+- The Rating column supports sorting by star count

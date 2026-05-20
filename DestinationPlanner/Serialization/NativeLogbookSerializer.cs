@@ -7,7 +7,7 @@ namespace DestinationPlanner.Serialization;
 public static class NativeLogbookSerializer
 {
     private const string Ns      = "urn:destination-planner:logbook:v1";
-    private const string Version = "1.1";
+    private const string Version = "1.2";
 
     public static void Save(IEnumerable<FlightRecord> flights, string filePath)
     {
@@ -47,11 +47,18 @@ public static class NativeLogbookSerializer
             new XElement(N("BlockOffUtc"),   f.BlockOffUtc.ToString("o")),
             new XElement(N("BlockOnUtc"),    f.BlockOnUtc.ToString("o")),
             // Landing stats — omitted when null so old-version files stay valid
-            f.LandingFpm.HasValue           ? new XElement(N("LandingFpm"),          F1(f.LandingFpm.Value))           : null,
-            f.LandingGForce.HasValue        ? new XElement(N("LandingGForce"),       F2(f.LandingGForce.Value))        : null,
-            f.LandingAirspeedKts.HasValue   ? new XElement(N("LandingAirspeedKts"),  F1(f.LandingAirspeedKts.Value))   : null,
-            f.LandingWindKts.HasValue       ? new XElement(N("LandingWindKts"),      F1(f.LandingWindKts.Value))       : null,
-            f.LandingWindDirection.HasValue ? new XElement(N("LandingWindDir"),      F0(f.LandingWindDirection.Value)) : null);
+            f.LandingFpm.HasValue                   ? new XElement(N("LandingFpm"),               F1(f.LandingFpm.Value))                   : null,
+            f.LandingGForce.HasValue                ? new XElement(N("LandingGForce"),            F2(f.LandingGForce.Value))                : null,
+            f.LandingAirspeedKts.HasValue           ? new XElement(N("LandingAirspeedKts"),       F1(f.LandingAirspeedKts.Value))           : null,
+            f.LandingWindKts.HasValue               ? new XElement(N("LandingWindKts"),           F1(f.LandingWindKts.Value))               : null,
+            f.LandingWindDirection.HasValue         ? new XElement(N("LandingWindDir"),           F0(f.LandingWindDirection.Value))         : null,
+            f.LandingHeadingDeg.HasValue            ? new XElement(N("LandingHeadingDeg"),        F1(f.LandingHeadingDeg.Value))            : null,
+            f.LandingBankAngleDeg.HasValue          ? new XElement(N("LandingBankAngleDeg"),      F1(f.LandingBankAngleDeg.Value))          : null,
+            f.LandingPitchAngleDeg.HasValue         ? new XElement(N("LandingPitchAngleDeg"),     F1(f.LandingPitchAngleDeg.Value))         : null,
+            f.LandingCrosswindKts.HasValue          ? new XElement(N("LandingCrosswindKts"),      F1(f.LandingCrosswindKts.Value))          : null,
+            f.LandingCenterlineDeviationFt.HasValue ? new XElement(N("LandingCenterlineFt"),      F1(f.LandingCenterlineDeviationFt.Value)) : null,
+            f.LandingTouchdownZonePct.HasValue      ? new XElement(N("LandingTouchdownZonePct"),  F1(f.LandingTouchdownZonePct.Value))      : null,
+            f.LandingStars.HasValue                 ? new XElement(N("LandingStars"),             f.LandingStars.Value)                     : null);
     }
 
     private static FlightRecord FromXml(XElement el)
@@ -68,16 +75,26 @@ public static class NativeLogbookSerializer
             BlockOffUtc   = DateTime.Parse(el.Element(N("BlockOffUtc"))!.Value).ToUniversalTime(),
             BlockOnUtc    = DateTime.Parse(el.Element(N("BlockOnUtc"))!.Value).ToUniversalTime(),
             // Landing stats — absent in older files; parsed as null
-            LandingFpm           = ParseNullDouble(el.Element(N("LandingFpm"))?.Value),
-            LandingGForce        = ParseNullDouble(el.Element(N("LandingGForce"))?.Value),
-            LandingAirspeedKts   = ParseNullDouble(el.Element(N("LandingAirspeedKts"))?.Value),
-            LandingWindKts       = ParseNullDouble(el.Element(N("LandingWindKts"))?.Value),
-            LandingWindDirection = ParseNullDouble(el.Element(N("LandingWindDir"))?.Value),
+            LandingFpm                   = ParseNullDouble(el.Element(N("LandingFpm"))?.Value),
+            LandingGForce                = ParseNullDouble(el.Element(N("LandingGForce"))?.Value),
+            LandingAirspeedKts           = ParseNullDouble(el.Element(N("LandingAirspeedKts"))?.Value),
+            LandingWindKts               = ParseNullDouble(el.Element(N("LandingWindKts"))?.Value),
+            LandingWindDirection         = ParseNullDouble(el.Element(N("LandingWindDir"))?.Value),
+            LandingHeadingDeg            = ParseNullDouble(el.Element(N("LandingHeadingDeg"))?.Value),
+            LandingBankAngleDeg          = ParseNullDouble(el.Element(N("LandingBankAngleDeg"))?.Value),
+            LandingPitchAngleDeg         = ParseNullDouble(el.Element(N("LandingPitchAngleDeg"))?.Value),
+            LandingCrosswindKts          = ParseNullDouble(el.Element(N("LandingCrosswindKts"))?.Value),
+            LandingCenterlineDeviationFt = ParseNullDouble(el.Element(N("LandingCenterlineFt"))?.Value),
+            LandingTouchdownZonePct      = ParseNullDouble(el.Element(N("LandingTouchdownZonePct"))?.Value),
+            LandingStars                 = ParseNullInt(el.Element(N("LandingStars"))?.Value),
         };
     }
 
     private static double? ParseNullDouble(string? s)
         => s is null ? null : double.Parse(s, CultureInfo.InvariantCulture);
+
+    private static int? ParseNullInt(string? s)
+        => s is null ? null : int.Parse(s, CultureInfo.InvariantCulture);
 
     private static string F0(double v) => v.ToString("F0", CultureInfo.InvariantCulture);
     private static string F1(double v) => v.ToString("F1", CultureInfo.InvariantCulture);

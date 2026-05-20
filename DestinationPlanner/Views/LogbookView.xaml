@@ -101,6 +101,9 @@
                 <DataGridTextColumn Header="Duration"
                                     Binding="{Binding BlockTime, StringFormat='{}{0:h\\:mm}'}"
                                     Width="75"/>
+                <DataGridTextColumn Header="Rating"
+                                    Binding="{Binding LandingStarsDisplay}"
+                                    Width="70" SortMemberPath="LandingStars"/>
                 <DataGridTextColumn Header="FPM"
                                     Binding="{Binding LandingFpmDisplay}"
                                     Width="65"/>

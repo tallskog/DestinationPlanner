@@ -92,8 +92,10 @@ public class AirportDataService : IAirportDataService
     {
         // OurAirports runways.csv columns:
         // 0:id, 1:airport_ref, 2:airport_ident, 3:length_ft, 4:width_ft, 5:surface,
-        // 6:lighted, 7:closed, 8:le_ident, ..., 14:he_ident
-        var runwaysByAirport = new Dictionary<string, List<(string ident, int lengthFt)>>(StringComparer.OrdinalIgnoreCase);
+        // 6:lighted, 7:closed, 8:le_ident, 9:le_heading_degT, 10:le_latitude_deg,
+        // 11:le_longitude_deg, 12:le_elevation_ft, 13:le_displaced_threshold_ft,
+        // 14:he_ident, 15:he_heading_degT, 16:he_latitude_deg, 17:he_longitude_deg
+        var runwaysByAirport = new Dictionary<string, List<Models.Runway>>(StringComparer.OrdinalIgnoreCase);
 
         using var reader = new StreamReader(path, Encoding.UTF8);
         reader.ReadLine(); // skip header
@@ -114,23 +116,44 @@ public class AirportDataService : IAirportDataService
             var heIdent = f.Length > 14 ? f[14].Trim() : string.Empty;
             var runwayIdent = string.IsNullOrEmpty(heIdent) ? leIdent : $"{leIdent}/{heIdent}";
 
+            var runway = new Models.Runway { Ident = runwayIdent, LengthFt = lengthFt };
+
+            // Parse endpoint coordinates (available in columns 9–11 and 15–17)
+            if (f.Length > 11)
+            {
+                runway.LeHeadingDeg = ParseNullableDouble(f[9]);
+                runway.LeLatitude   = ParseNullableDouble(f[10]);
+                runway.LeLongitude  = ParseNullableDouble(f[11]);
+            }
+            if (f.Length > 17)
+            {
+                runway.HeHeadingDeg = ParseNullableDouble(f[15]);
+                runway.HeLatitude   = ParseNullableDouble(f[16]);
+                runway.HeLongitude  = ParseNullableDouble(f[17]);
+            }
+
             if (!runwaysByAirport.TryGetValue(airportIdent, out var list))
             {
                 list = [];
                 runwaysByAirport[airportIdent] = list;
             }
-            list.Add((runwayIdent, lengthFt));
+            list.Add(runway);
         }
 
         foreach (var (airportIdent, runways) in runwaysByAirport)
         {
             if (!airports.TryGetValue(airportIdent, out var airport)) continue;
-            airport.Runways = runways
-                .OrderByDescending(r => r.lengthFt)
-                .Select(r => new Models.Runway { Ident = r.ident, LengthFt = r.lengthFt })
-                .ToList();
+            airport.Runways = runways.OrderByDescending(r => r.LengthFt).ToList();
             airport.LongestRunwayFt = airport.Runways[0].LengthFt;
         }
+    }
+
+    private static double? ParseNullableDouble(string s)
+    {
+        s = s.Trim();
+        if (string.IsNullOrEmpty(s)) return null;
+        return double.TryParse(s, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out double v) ? v : null;
     }
 
     // airport-frequencies.csv columns: id, airport_ref, airport_ident, type, description, frequency_mhz

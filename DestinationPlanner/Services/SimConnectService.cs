@@ -1,5 +1,6 @@
 using DestinationPlanner.Helpers;
 using DestinationPlanner.Models;
+using System.Collections.Generic;
 using Microsoft.FlightSimulator.SimConnect;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -65,6 +66,8 @@ public class SimConnectService : ISimConnectService
         public double AirspeedIndicated;// AIRSPEED INDICATED,       knots
         public double WindVelocity;     // AMBIENT WIND VELOCITY,    knots
         public double WindDirection;    // AMBIENT WIND DIRECTION,   degrees true
+        public double BankDegrees;      // PLANE BANK DEGREES,       degrees (positive = right wing down)
+        public double PitchDegrees;     // PLANE PITCH DEGREES,      degrees (positive = nose up)
         public int    ParkingBrake;     // BRAKE PARKING INDICATOR,  Bool (0/1)
         public int    OnGround;         // SIM ON GROUND,            Bool (0/1)
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
@@ -73,7 +76,9 @@ public class SimConnectService : ISimConnectService
 
     private record LandingStats(
         double Fpm, double GForce, double AirspeedKts,
-        double WindKts, double WindDirection);
+        double WindKts, double WindDirection,
+        double Latitude, double Longitude,
+        double HeadingDeg, double BankDeg, double PitchDeg);
 
     public SimConnectService(IAirportDataService airports) => _airports = airports;
 
@@ -105,6 +110,8 @@ public class SimConnectService : ISimConnectService
             _sc.AddToDataDefinition(Defs.SimData, "AIRSPEED INDICATED",        "knots",      SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "AMBIENT WIND VELOCITY",     "knots",      SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "AMBIENT WIND DIRECTION",    "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "PLANE BANK DEGREES",        "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "PLANE PITCH DEGREES",       "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "BRAKE PARKING INDICATOR",   "Bool",       SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "SIM ON GROUND",             "Bool",       SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "TITLE",                     null,         SIMCONNECT_DATATYPE.STRING256, 0f, SimConnect.SIMCONNECT_UNUSED);
@@ -242,7 +249,12 @@ public class SimConnectService : ISimConnectService
                     GForce:       peakGForce,
                     AirspeedKts:  sd.AirspeedIndicated,
                     WindKts:      sd.WindVelocity,
-                    WindDirection:sd.WindDirection);
+                    WindDirection:sd.WindDirection,
+                    Latitude:     sd.Latitude,
+                    Longitude:    sd.Longitude,
+                    HeadingDeg:   sd.HeadingDegrees,
+                    BankDeg:      sd.BankDegrees,
+                    PitchDeg:     sd.PitchDegrees);
             }
 
             _lastOnGround = onGround;
@@ -275,20 +287,35 @@ public class SimConnectService : ISimConnectService
                 !string.Equals(_departureIcao, arrivalIcao, StringComparison.OrdinalIgnoreCase))
             {
                 // Arrived at a different airport — flight complete, reset for the next one.
-                FlightCompleted?.Invoke(this, new FlightRecord
+                var record = new FlightRecord
                 {
-                    Date                = DateOnly.FromDateTime(DateTime.UtcNow),
-                    AircraftModel       = _aircraftModel,
-                    DepartureIcao       = _departureIcao,
-                    ArrivalIcao         = arrivalIcao,
-                    BlockOffUtc         = _blockOffUtc,
-                    BlockOnUtc          = blockOnUtc,
-                    LandingFpm          = _lastLandingStats?.Fpm,
-                    LandingGForce       = _lastLandingStats?.GForce,
-                    LandingAirspeedKts  = _lastLandingStats?.AirspeedKts,
-                    LandingWindKts      = _lastLandingStats?.WindKts,
-                    LandingWindDirection= _lastLandingStats?.WindDirection,
-                });
+                    Date                 = DateOnly.FromDateTime(DateTime.UtcNow),
+                    AircraftModel        = _aircraftModel,
+                    DepartureIcao        = _departureIcao,
+                    ArrivalIcao          = arrivalIcao,
+                    BlockOffUtc          = _blockOffUtc,
+                    BlockOnUtc           = blockOnUtc,
+                    LandingFpm           = _lastLandingStats?.Fpm,
+                    LandingGForce        = _lastLandingStats?.GForce,
+                    LandingAirspeedKts   = _lastLandingStats?.AirspeedKts,
+                    LandingWindKts       = _lastLandingStats?.WindKts,
+                    LandingWindDirection = _lastLandingStats?.WindDirection,
+                    LandingHeadingDeg    = _lastLandingStats?.HeadingDeg,
+                    LandingBankAngleDeg  = _lastLandingStats?.BankDeg,
+                    LandingPitchAngleDeg = _lastLandingStats?.PitchDeg,
+                };
+
+                if (_lastLandingStats is not null)
+                {
+                    var arrivalAirport = _airports.GetByIcao(arrivalIcao);
+                    LandingRatingHelper.Enrich(
+                        record,
+                        _lastLandingStats.Latitude,
+                        _lastLandingStats.Longitude,
+                        arrivalAirport?.Runways);
+                }
+
+                FlightCompleted?.Invoke(this, record);
                 _departureIcao    = null;
                 _aircraftModel    = string.Empty;
                 _lastLandingStats = null;

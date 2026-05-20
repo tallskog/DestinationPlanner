@@ -5,6 +5,7 @@ A Windows desktop application for Microsoft Flight Simulator 2024 that combines 
 ## Features
 
 - **Live flight recording** — connects to MSFS 2024 via SimConnect and captures each flight (parking brake release → set) automatically
+- **Landing quality rating** — automatically rates each landing 1–5 stars based on vertical speed, G-force, bank angle, pitch attitude, centerline deviation, and touchdown zone accuracy; displayed as ★★★★☆ in the logbook
 - **Flight logbook** — view, filter, edit, and manage your flight history; supports a native XML format, a foreign XML import format, and Little Navmap CSV export files
 - **Import highlighting** — newly imported flights are highlighted in light green; clears on "Clear Filters" or next launch
 - **Smart duplicate detection** — prevents double entries even when times differ slightly (minute-precision imports vs. second-precision live recordings) or when the same flight appears with a time offset but matching duration
@@ -57,7 +58,7 @@ The map tab requires airport data from [OurAirports](https://ourairports.com/dat
 3. Place both files in the same folder
 4. In the app: **File → Load Airport Data…** → select `airports.csv`
 
-The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, the runway-length filter has no effect.
+The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, the runway-length filter has no effect and the centerline deviation / touchdown zone components of the landing rating are skipped (the rating is computed from the remaining factors).
 
 ## SimConnect setup
 
@@ -114,7 +115,7 @@ DestinationPlanner/
 ├── Services/        LogbookService, AirportDataService, SimConnectService
 ├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter, LittleNavmapCsvImporter
 ├── Schemas/         NativeLogbook.xsd, ForeignLogbook.xsd
-└── Helpers/         GeoHelper, RelayCommand, AppDataHelper
+└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper
 ```
 
 ## Native logbook XML format
