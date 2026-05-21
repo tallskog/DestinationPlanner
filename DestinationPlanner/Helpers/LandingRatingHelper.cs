@@ -2,6 +2,14 @@ using DestinationPlanner.Models;
 
 namespace DestinationPlanner.Helpers;
 
+public record LandingComponent(string Name, string MeasuredValue, double? Score, double Weight)
+{
+    public string ScoreDisplay  => Score.HasValue ? $"{Score.Value:F0}/100" : "N/A";
+    public string WeightDisplay => $"{Weight * 100:F0}%";
+}
+
+public record LandingBreakdown(int Stars, double TotalScore, IReadOnlyList<LandingComponent> Components);
+
 public static class LandingRatingHelper
 {
     // Computes derived landing fields (crosswind, runway geometry, star rating) and
@@ -85,38 +93,41 @@ public static class LandingRatingHelper
     }
 
     // Returns 1–5, or null if there is insufficient data to rate.
-    public static int? ComputeStars(FlightRecord r)
+    public static int? ComputeStars(FlightRecord r) => ComputeBreakdown(r)?.Stars;
+
+    // Returns a full per-component breakdown, or null if insufficient data.
+    public static LandingBreakdown? ComputeBreakdown(FlightRecord r)
     {
-        var components = new (double Weight, double? Value, Func<double, double> Scorer)[]
+        double? fpmScore  = r.LandingFpm.HasValue          ? ScoreFpm(Math.Abs(r.LandingFpm.Value))          : null;
+        double? gScore    = r.LandingGForce.HasValue        ? ScoreGForce(r.LandingGForce.Value)               : null;
+        double? bankScore = r.LandingBankAngleDeg.HasValue  ? ScoreBank(Math.Abs(r.LandingBankAngleDeg.Value)) : null;
+        double? pitchScore = r.LandingPitchAngleDeg.HasValue ? ScorePitch(r.LandingPitchAngleDeg.Value)        : null;
+        double? clScore   = r.LandingCenterlineDeviationFt.HasValue ? ScoreCenterline(r.LandingCenterlineDeviationFt.Value) : null;
+        double? tdzScore  = r.LandingTouchdownZonePct.HasValue      ? ScoreTdz(r.LandingTouchdownZonePct.Value)             : null;
+
+        var components = new LandingComponent[]
         {
-            (0.30, r.LandingFpm.HasValue          ? Math.Abs(r.LandingFpm.Value) : null, ScoreFpm),
-            (0.20, r.LandingGForce,                                                       ScoreGForce),
-            (0.15, r.LandingBankAngleDeg.HasValue  ? Math.Abs(r.LandingBankAngleDeg.Value) : null, ScoreBank),
-            (0.10, r.LandingPitchAngleDeg,                                                ScorePitch),
-            (0.10, r.LandingCenterlineDeviationFt,                                        ScoreCenterline),
-            (0.15, r.LandingTouchdownZonePct,                                             ScoreTdz),
+            new("Vertical Speed",      r.LandingFpm.HasValue                  ? $"{Math.Abs(r.LandingFpm.Value):F0} FPM"                : "—", fpmScore,   0.30),
+            new("G-Force",             r.LandingGForce.HasValue               ? $"{r.LandingGForce.Value:F2} g"                         : "—", gScore,     0.20),
+            new("Bank Angle",          r.LandingBankAngleDeg.HasValue         ? $"{Math.Abs(r.LandingBankAngleDeg.Value):F1}°"          : "—", bankScore,  0.15),
+            new("Pitch Angle",         r.LandingPitchAngleDeg.HasValue        ? $"{r.LandingPitchAngleDeg.Value:F1}°"                   : "—", pitchScore, 0.10),
+            new("Centerline Dev.",     r.LandingCenterlineDeviationFt.HasValue ? $"{r.LandingCenterlineDeviationFt.Value:F0} ft"        : "—", clScore,    0.10),
+            new("Touchdown Zone",      r.LandingTouchdownZonePct.HasValue     ? $"{r.LandingTouchdownZonePct.Value:F0}%"                : "—", tdzScore,   0.15),
         };
 
-        double totalWeight = 0;
-        double totalScore  = 0;
-        foreach (var (weight, value, scorer) in components)
+        double totalWeight = 0, totalScore = 0;
+        foreach (var c in components)
         {
-            if (!value.HasValue) continue;
-            totalWeight += weight;
-            totalScore  += weight * scorer(value.Value);
+            if (!c.Score.HasValue) continue;
+            totalWeight += c.Weight;
+            totalScore  += c.Weight * c.Score.Value;
         }
 
         if (totalWeight < 0.01) return null;
 
-        double score = totalScore / totalWeight;
-        return score switch
-        {
-            >= 85 => 5,
-            >= 70 => 4,
-            >= 50 => 3,
-            >= 30 => 2,
-            _     => 1,
-        };
+        double overall = totalScore / totalWeight;
+        int stars = overall switch { >= 85 => 5, >= 70 => 4, >= 50 => 3, >= 30 => 2, _ => 1 };
+        return new LandingBreakdown(stars, overall, components);
     }
 
     // ---- Component scorers (each returns 0–100) ----

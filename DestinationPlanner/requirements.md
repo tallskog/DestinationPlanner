@@ -85,3 +85,23 @@
 - All new fields (`LandingHeadingDeg`, `LandingBankAngleDeg`, `LandingPitchAngleDeg`, `LandingCrosswindKts`, `LandingCenterlineDeviationFt`, `LandingTouchdownZonePct`, `LandingStars`) are persisted in the XML logbook (schema v1.2) using the omit-if-null pattern
 - Pre-v1.2 logbook files open without error; the Rating column shows `—` for those flights
 - The Rating column supports sorting by star count
+
+---
+
+## US23: Landing rating detail popup
+**As a pilot**, I want to click on a flight's star rating in the logbook to see a detailed breakdown of how the rating was calculated, so I can understand which aspects of the landing were good or needed improvement.
+
+**Acceptance criteria:**
+- Clicking the star rating cell for a flight with rating data opens a modal dialog titled "Landing Rating — {FROM} → {TO} — {date}"
+- The dialog shows a table with one row per scoring component (Vertical Speed, G-Force, Bank Angle, Pitch Angle, Centerline Dev., Touchdown Zone), each with its weight percentage, measured value, and individual score (0–100)
+- Individual scores are colour-coded: green (≥80), orange (≥60), red (<60); components with no data show "N/A" in grey
+- The dialog shows the overall weighted score and the final star display (e.g. `★★★★☆`)
+- Flights with no rating data show `—`; clicking `—` does nothing (button disabled)
+- No new logbook fields are required — all data is already stored by US22
+
+---
+
+## BUG-01: Runway CSV column mapping
+**Root cause:** `AirportDataService.ApplyRunwayData` read columns 9/10/11 for LE heading/lat/lon and 15/16/17 for HE heading/lat/lon. The actual OurAirports runways.csv header places coordinates at 9/10 and headings at 12/18 (with elevation fields at 11/17 between them). The code treated latitude as heading and elevation as longitude, placing every runway in the wrong location (e.g. EFTU appeared near Japan, producing 14 million ft centerline deviation).
+
+**Fix:** Column indices corrected to: LE lat=9, lon=10, heading=12; HE lat=15, lon=16, heading=18. Existing logbook records that captured wrong geometry values are unaffected (stored values are not recomputed on load).

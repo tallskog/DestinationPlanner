@@ -90,11 +90,12 @@ public class AirportDataService : IAirportDataService
 
     private static void ApplyRunwayData(Dictionary<string, Airport> airports, string path)
     {
-        // OurAirports runways.csv columns:
+        // OurAirports runways.csv columns (verified against actual header):
         // 0:id, 1:airport_ref, 2:airport_ident, 3:length_ft, 4:width_ft, 5:surface,
-        // 6:lighted, 7:closed, 8:le_ident, 9:le_heading_degT, 10:le_latitude_deg,
-        // 11:le_longitude_deg, 12:le_elevation_ft, 13:le_displaced_threshold_ft,
-        // 14:he_ident, 15:he_heading_degT, 16:he_latitude_deg, 17:he_longitude_deg
+        // 6:lighted, 7:closed, 8:le_ident, 9:le_latitude_deg, 10:le_longitude_deg,
+        // 11:le_elevation_ft, 12:le_heading_degT, 13:le_displaced_threshold_ft,
+        // 14:he_ident, 15:he_latitude_deg, 16:he_longitude_deg, 17:he_elevation_ft,
+        // 18:he_heading_degT, 19:he_displaced_threshold_ft
         var runwaysByAirport = new Dictionary<string, List<Models.Runway>>(StringComparer.OrdinalIgnoreCase);
 
         using var reader = new StreamReader(path, Encoding.UTF8);
@@ -118,18 +119,18 @@ public class AirportDataService : IAirportDataService
 
             var runway = new Models.Runway { Ident = runwayIdent, LengthFt = lengthFt };
 
-            // Parse endpoint coordinates (available in columns 9–11 and 15–17)
-            if (f.Length > 11)
+            // Parse endpoint coordinates and headings.
+            if (f.Length > 12)
             {
-                runway.LeHeadingDeg = ParseNullableDouble(f[9]);
-                runway.LeLatitude   = ParseNullableDouble(f[10]);
-                runway.LeLongitude  = ParseNullableDouble(f[11]);
+                runway.LeLatitude   = ParseNullableDouble(f[9]);
+                runway.LeLongitude  = ParseNullableDouble(f[10]);
+                runway.LeHeadingDeg = ParseNullableDouble(f[12]);
             }
-            if (f.Length > 17)
+            if (f.Length > 18)
             {
-                runway.HeHeadingDeg = ParseNullableDouble(f[15]);
-                runway.HeLatitude   = ParseNullableDouble(f[16]);
-                runway.HeLongitude  = ParseNullableDouble(f[17]);
+                runway.HeLatitude   = ParseNullableDouble(f[15]);
+                runway.HeLongitude  = ParseNullableDouble(f[16]);
+                runway.HeHeadingDeg = ParseNullableDouble(f[18]);
             }
 
             if (!runwaysByAirport.TryGetValue(airportIdent, out var list))

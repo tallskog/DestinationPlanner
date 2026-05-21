@@ -101,9 +101,31 @@
                 <DataGridTextColumn Header="Duration"
                                     Binding="{Binding BlockTime, StringFormat='{}{0:h\\:mm}'}"
                                     Width="75"/>
-                <DataGridTextColumn Header="Rating"
-                                    Binding="{Binding LandingStarsDisplay}"
-                                    Width="70" SortMemberPath="LandingStars"/>
+                <DataGridTemplateColumn Header="Rating" Width="70" SortMemberPath="LandingStars">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding LandingStarsDisplay}"
+                                    Click="RatingButton_Click"
+                                    ToolTip="Click to see rating details"
+                                    Padding="0" Margin="2,0">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="HorizontalAlignment" Value="Left"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding LandingStars}" Value="{x:Null}">
+                                                <Setter Property="IsEnabled" Value="False"/>
+                                                <Setter Property="Cursor" Value="Arrow"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="FPM"
                                     Binding="{Binding LandingFpmDisplay}"
                                     Width="65"/>
