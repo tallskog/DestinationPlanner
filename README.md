@@ -11,7 +11,7 @@ A Windows desktop application for Microsoft Flight Simulator 2024 that combines 
 - **Smart duplicate detection** — prevents double entries even when times differ slightly (minute-precision imports vs. second-precision live recordings) or when the same flight appears with a time offset but matching duration
 - **Interactive map** — OpenStreetMap tiles with zoom and pan; airport markers filtered by runway length, ILS capability, or radius from a centre airport
 - **Logbook airports on map** — airports you have flown to/from are highlighted in a different colour
-- **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**
+- **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**; the last-used logbook is remembered across sessions so you are not prompted on every start
 
 ## Prerequisites
 
@@ -104,6 +104,22 @@ Click **Apply Filters** to update the map. **Clear** resets all filters to their
 ### Airport search
 A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.
 
+## Configuration
+
+A `settings.json` file is created automatically in the AppData directory (`%LocalAppData%\DestinationPlanner\`) on first run. You can edit it with any text editor:
+
+```json
+{
+  "SimDataRateHz": 60,
+  "LastLogbookPath": "C:\\Users\\...\\AppData\\Local\\DestinationPlanner\\logbook-01-01-2026.xml"
+}
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `SimDataRateHz` | `60` | SimConnect sampling rate. Values > 1 use visual-frame sampling; at 60 fps sim framerate, 60 = every frame, 10 = every 6th frame. A value of 1 uses once-per-second sampling. |
+| `LastLogbookPath` | *(auto-set)* | Path of the logbook opened in the previous session. Set automatically; edit to override. |
+
 ## Project structure
 
 ```
@@ -115,7 +131,7 @@ DestinationPlanner/
 ├── Services/        LogbookService, AirportDataService, SimConnectService
 ├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter, LittleNavmapCsvImporter
 ├── Schemas/         NativeLogbook.xsd, ForeignLogbook.xsd
-└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper
+└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper, AppSettings, AppSettingsService
 ```
 
 ## Native logbook XML format

@@ -1,3 +1,4 @@
+using DestinationPlanner.Helpers;
 using DestinationPlanner.Services;
 using System.Windows;
 
@@ -16,7 +17,7 @@ public class MainViewModel : ViewModelBase
     private string _simStatus = "MSFS: Not connected";
     public string SimStatus { get => _simStatus; private set => SetField(ref _simStatus, value); }
 
-    public MainViewModel(string logbookPath)
+    public MainViewModel(string logbookPath, AppSettings settings)
     {
         var logbook = new LogbookService();
         try
@@ -33,13 +34,13 @@ public class MainViewModel : ViewModelBase
 
         AirportData = new AirportDataService();
 
-        var sim = new SimConnectService(AirportData);
+        var sim = new SimConnectService(AirportData, settings.SimDataRateHz);
         sim.FlightCompleted   += (_, record) => logbook.AddFlight(record);
         sim.ConnectionChanged += (_, _) =>
             SimStatus = sim.IsConnected ? "MSFS: Connected" : "MSFS: Not connected";
         SimConnect = sim;
 
-        Logbook = new LogbookViewModel(logbook);
+        Logbook = new LogbookViewModel(logbook, settings);
         Map     = new MapViewModel(AirportData, logbook, sim);
     }
 }

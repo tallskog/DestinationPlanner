@@ -12,6 +12,7 @@ namespace DestinationPlanner.ViewModels;
 public class LogbookViewModel : ViewModelBase
 {
     private readonly ILogbookService _logbook;
+    private readonly AppSettings _settings;
 
     private DateTime? _filterFromDate;
     private DateTime? _filterToDate;
@@ -73,9 +74,10 @@ public class LogbookViewModel : ViewModelBase
     public ICommand EditFlightCommand { get; }
     public ICommand DeleteFlightCommand { get; }
 
-    public LogbookViewModel(ILogbookService logbook)
+    public LogbookViewModel(ILogbookService logbook, AppSettings settings)
     {
-        _logbook = logbook;
+        _logbook  = logbook;
+        _settings = settings;
         _logbook.FlightsChanged += (_, _) => ApplyFilters();
 
         OpenLogbookCommand   = new RelayCommand(OpenLogbook);
@@ -107,6 +109,8 @@ public class LogbookViewModel : ViewModelBase
             return;
 
         _logbook.Load(dlg.SelectedPath);
+        _settings.LastLogbookPath = dlg.SelectedPath;
+        AppSettingsService.Save(_settings);
         NewlyImportedIds = new HashSet<Guid>();
         ApplyFilters();
     }

@@ -8,6 +8,7 @@ using System.Windows.Threading;
 using Velopack;
 using Velopack.Sources;
 
+
 namespace DestinationPlanner;
 
 public partial class MainWindow : Window
@@ -18,10 +19,10 @@ public partial class MainWindow : Window
         new GithubSource("https://github.com/tallskog/DestinationPlanner", null, false));
     private UpdateInfo? _pendingUpdate;
 
-    public MainWindow(string logbookPath)
+    public MainWindow(string logbookPath, AppSettings settings)
     {
         InitializeComponent();
-        DataContext = new MainViewModel(logbookPath);
+        DataContext = new MainViewModel(logbookPath, settings);
         Loaded += MainWindow_Loaded;
     }
 

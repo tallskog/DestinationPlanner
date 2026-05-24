@@ -17,6 +17,7 @@ public class SimConnectService : ISimConnectService
     private const int WM_USER_SIMCONNECT = 0x0402;
 
     private readonly IAirportDataService _airports;
+    private readonly int _simDataRateHz;
 
     private SimConnect? _sc;
     private HwndSource? _hwndSource;
@@ -39,9 +40,16 @@ public class SimConnectService : ISimConnectService
     // Captured at touchdown; carried into the FlightRecord when flight completes.
     private LandingStats? _lastLandingStats;
 
-    // Rolling window of recent FPM/G-force samples used to find the peak at touchdown.
-    private readonly Queue<(double Fpm, double GForce, DateTime Time)> _landingWindow = new();
-    private const int LandingWindowSeconds = 5;
+    // Last vertical speed observed while the aircraft was airborne.
+    // Updated every frame when not on ground; used as the touchdown FPM at landing.
+    // This gives the actual descent rate at contact, not the approach rate from seconds earlier.
+    private double _lastAirborneVerticalSpeed;
+
+    // Rolling window of G-force samples used to find the true impact peak.
+    // G-force spikes briefly at the impact frame; the window ensures we don't miss it
+    // if the GROUND state transition is detected one or two frames after actual contact.
+    private readonly Queue<(double GForce, DateTime Time)> _landingWindow = new();
+    private const int LandingWindowSeconds = 2;
 
     public bool IsConnected { get; private set; }
     public event EventHandler<FlightRecord>? FlightCompleted;
@@ -80,7 +88,11 @@ public class SimConnectService : ISimConnectService
         double Latitude, double Longitude,
         double HeadingDeg, double BankDeg, double PitchDeg);
 
-    public SimConnectService(IAirportDataService airports) => _airports = airports;
+    public SimConnectService(IAirportDataService airports, int simDataRateHz = 60)
+    {
+        _airports       = airports;
+        _simDataRateHz  = simDataRateHz;
+    }
 
     // Called from the UI thread (OnSourceInitialized / reconnect timer).
     public void Connect(nint windowHandle)
@@ -117,12 +129,19 @@ public class SimConnectService : ISimConnectService
             _sc.AddToDataDefinition(Defs.SimData, "TITLE",                     null,         SIMCONNECT_DATATYPE.STRING256, 0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.RegisterDataDefineStruct<SimData>(Defs.SimData);
 
+            // Use VISUAL_FRAME for > 1 Hz to improve landing-stats accuracy.
+            // interval = every Nth visual frame; at 60 fps sim: Hz = 60 / interval.
+            var (period, interval) = _simDataRateHz > 1
+                ? (SIMCONNECT_PERIOD.VISUAL_FRAME,
+                   (uint)Math.Max(1, (int)Math.Round(60.0 / _simDataRateHz)))
+                : (SIMCONNECT_PERIOD.SECOND, 0u);
+
             _sc.RequestDataOnSimObject(
                 Reqs.SimData, Defs.SimData,
                 SimConnect.SIMCONNECT_OBJECT_ID_USER,
-                SIMCONNECT_PERIOD.SECOND,
+                period,
                 SIMCONNECT_DATA_REQUEST_FLAG.CHANGED,
-                0, 0, 0);
+                0, interval, 0);
 
             // Hook WndProc once — reuse the HwndSource across reconnects.
             if (_hwndSource is null)
@@ -175,11 +194,12 @@ public class SimConnectService : ISimConnectService
 
     private void OnQuit(SimConnect sender, SIMCONNECT_RECV data)
     {
-        _inFlight         = false;
-        _initialized      = false;
-        _departureIcao    = null;
-        _aircraftModel    = string.Empty;
-        _lastLandingStats = null;
+        _inFlight                   = false;
+        _initialized                = false;
+        _departureIcao              = null;
+        _aircraftModel              = string.Empty;
+        _lastLandingStats           = null;
+        _lastAirborneVerticalSpeed  = 0;
         _landingWindow.Clear();
         CleanupSimConnect();
         SetConnected(false);
@@ -221,10 +241,14 @@ public class SimConnectService : ISimConnectService
         PositionChanged?.Invoke(this, new AircraftPositionEventArgs(
             sd.Latitude, sd.Longitude, sd.HeadingDegrees));
 
-        // Maintain rolling window so touchdown capture sees the actual impact peak,
-        // not a decayed value from up to 1 second after ground contact.
+        // Track last airborne vertical speed for accurate touchdown FPM.
+        if (!onGround)
+            _lastAirborneVerticalSpeed = sd.VerticalSpeed;
+
+        // Maintain a short G-force window so the impact peak is captured even if
+        // the GROUND state transitions one or two frames after actual contact.
         var now = DateTime.UtcNow;
-        _landingWindow.Enqueue((sd.VerticalSpeed, sd.GForce, now));
+        _landingWindow.Enqueue((sd.GForce, now));
         while (_landingWindow.Count > 0 &&
                (now - _landingWindow.Peek().Time).TotalSeconds > LandingWindowSeconds)
             _landingWindow.Dequeue();
@@ -234,18 +258,16 @@ public class SimConnectService : ISimConnectService
             // Capture landing stats at the moment of touchdown.
             if (onGround && _inFlight)
             {
-                // Scan the window for the worst FPM (most negative) and peak G-force.
-                // With 1 Hz polling the transition frame may be up to 1 s after
-                // actual impact; the window includes the pre-impact frames.
-                double worstFpm   = sd.VerticalSpeed;
+                // FPM: use the last airborne reading — the actual descent rate at contact,
+                // not a wider-window minimum which would reflect the approach phase.
+                // GForce: scan the short window for the true impact peak.
                 double peakGForce = sd.GForce;
-                foreach (var (fpm, g, _) in _landingWindow)
+                foreach (var (g, _) in _landingWindow)
                 {
-                    if (fpm < worstFpm)   worstFpm   = fpm;
-                    if (g   > peakGForce) peakGForce = g;
+                    if (g > peakGForce) peakGForce = g;
                 }
                 _lastLandingStats = new LandingStats(
-                    Fpm:          worstFpm,
+                    Fpm:          _lastAirborneVerticalSpeed,
                     GForce:       peakGForce,
                     AirspeedKts:  sd.AirspeedIndicated,
                     WindKts:      sd.WindVelocity,
@@ -254,7 +276,7 @@ public class SimConnectService : ISimConnectService
                     Longitude:    sd.Longitude,
                     HeadingDeg:   sd.HeadingDegrees,
                     BankDeg:      sd.BankDegrees,
-                    PitchDeg:     sd.PitchDegrees);
+                    PitchDeg:     -sd.PitchDegrees); // MSFS: negative = nose-up; negate to aviation convention
             }
 
             _lastOnGround = onGround;

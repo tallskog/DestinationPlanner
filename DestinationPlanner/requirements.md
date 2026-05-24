@@ -101,6 +101,50 @@
 
 ---
 
+## US24: Configurable SimConnect data sampling rate
+**As a developer/user**, I want to control how frequently SimConnect data is sampled so that landing detection accuracy can be tuned without recompiling the application.
+
+**Acceptance criteria:**
+- A `settings.json` file in the AppData directory controls `SimDataRateHz` (default: 60)
+- Values > 1 Hz use `SIMCONNECT_PERIOD.VISUAL_FRAME`; the interval is computed as `max(1, round(60 / Hz))`
+- A value of 1 (or less) falls back to `SIMCONNECT_PERIOD.SECOND`
+- The file is created automatically with defaults on first run
+- Changing the value takes effect on the next application start
+
+---
+
+## US25: Persist last-used logbook across sessions
+**As a user**, I want the application to remember which logbook I was using so that I do not have to select it again every time I start the app.
+
+**Acceptance criteria:**
+- On startup the app reads `LastLogbookPath` from `settings.json`; if the file exists on disk it is opened directly without showing any dialog
+- If the saved path no longer exists (file deleted/moved), the app falls back to the normal selection logic (auto-select if only one exists; show dialog if multiple exist)
+- After selecting a logbook via **File → Open Logbook…**, the new path is saved to `settings.json` immediately
+- The same `settings.json` file is used for all settings (US24)
+
+---
+
+## BUG-02: Aircraft map marker heading rotation
+**Root cause:** The ✈ glyph (U+2708) renders pointing to the right (East) in most Windows fonts. Applying `RotateTransform.Angle = headingDegrees` directly meant a heading of 0° (North) left the nose pointing East; the marker appeared rotated 90° counter-clockwise from the correct orientation.
+
+**Fix:** Applied a −90° base offset: `Angle = headingDegrees − 90`, so the glyph's nose points North at heading 0 and rotates correctly for all headings.
+
+---
+
+## BUG-03: Landing vertical speed captures approach rate instead of touchdown rate
+**Root cause:** The rolling window searched the last 5 seconds for the most negative FPM and used that as the touchdown rate. For landings with a proper flare the steepest descent occurs during the approach, not at contact, so the window captured the approach rate (~370 fpm) rather than the actual touchdown rate (~87 fpm).
+
+**Fix:** Track `_lastAirborneVerticalSpeed` — updated every frame while the aircraft is not on the ground. At touchdown this value holds the descent rate from the final airborne frame, which is the actual contact velocity. The landing window is now G-force-only (2 s, down from 5 s) so the impact G-force peak is still captured accurately.
+
+---
+
+## BUG-04: Landing pitch angle sign convention
+**Root cause:** MSFS SimConnect `PLANE PITCH DEGREES` returns negative values for nose-up attitudes and positive for nose-down. The `ScorePitch` function and the logbook display both assumed the opposite (standard aviation convention: positive = nose-up), causing flared landings to score 0 for pitch and nose-down touchdowns to score 100.
+
+**Fix:** Negate `sd.PitchDegrees` when storing the landing stats so the persisted value follows aviation convention (positive = nose-up). No changes to the scorer or display were required.
+
+---
+
 ## BUG-01: Runway CSV column mapping
 **Root cause:** `AirportDataService.ApplyRunwayData` read columns 9/10/11 for LE heading/lat/lon and 15/16/17 for HE heading/lat/lon. The actual OurAirports runways.csv header places coordinates at 9/10 and headings at 12/18 (with elevation fields at 11/17 between them). The code treated latitude as heading and elevation as longitude, placing every runway in the wrong location (e.g. EFTU appeared near Japan, producing 14 million ft centerline deviation).
 
