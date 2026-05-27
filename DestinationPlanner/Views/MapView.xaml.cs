@@ -519,8 +519,8 @@ public partial class MapView : UserControl
         _aircraftLat = e.Latitude;
         _aircraftLon = e.Longitude;
         // ✈ (U+2708) renders pointing right (East) in most fonts.
-        // Subtract 90° so heading 0 (North) rotates the nose upward.
-        _aircraftRotate.Angle = e.HeadingDegrees - 90;
+        // Subtract 45° because the ✈ glyph naturally points northeast (45° from north).
+        _aircraftRotate.Angle = e.HeadingDegrees - 45;
 
         _aircraftMarker.Visibility = _vm.SimConnected ? Visibility.Visible : Visibility.Collapsed;
         RepositionAircraftMarker();
