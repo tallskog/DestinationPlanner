@@ -10,7 +10,7 @@ A Windows desktop application for Microsoft Flight Simulator 2024 that combines 
 - **Import highlighting** — newly imported flights are highlighted in light green; clears on "Clear Filters" or next launch
 - **Smart duplicate detection** — prevents double entries even when times differ slightly (minute-precision imports vs. second-precision live recordings) or when the same flight appears with a time offset but matching duration
 - **Interactive map** — OpenStreetMap tiles with zoom and pan; airport markers filtered by runway length, ILS capability, or radius from a centre airport
-- **Logbook airports on map** — airports you have flown to/from are highlighted in a different colour
+- **Logbook airports on map** — visited airports are shown as orange dots; a green ring indicates you departed from there, a red ring that you landed there; both rings appear when you have done both, with a small gap between them; a map legend in the sidebar explains all symbols
 - **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**; the last-used logbook is remembered across sessions so you are not prompted on every start
 
 ## Prerequisites

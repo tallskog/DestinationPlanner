@@ -27,6 +27,8 @@ public partial class MapView : UserControl
     private MapViewModel? _vm;
     private MemoryLayer? _airportLayer;
     private MemoryLayer? _logbookLayer;
+    private MemoryLayer? _greenRingLayer;
+    private MemoryLayer? _redRingLayer;
     private int _airportCount;
     private int _logbookCount;
 
@@ -57,6 +59,20 @@ public partial class MapView : UserControl
         fill:         new MapsuiColor(220, 100, 0, 230),
         outline:      new MapsuiColor(140, 50, 0),
         outlineWidth: 1.5f);
+
+    // Green ring = departed; transparent fill so OSM shows through the gap between orange dot and ring.
+    private static readonly ZoomCircleStyle GreenRingStyle = new(
+        fill:            null,
+        outline:         new MapsuiColor(40, 200, 60, 230),
+        outlineWidth:    2.5f,
+        scaleMultiplier: 1.5);
+
+    // Red ring = landed; inner position when landed-only, outer when also departed (both rings visible).
+    private static readonly RingStyle RedRingStyle = new(
+        color:           new MapsuiColor(200, 40, 40, 230),
+        outlineWidth:    2.5f,
+        innerMultiplier: 1.5,
+        outerMultiplier: 2.0);
 
     // Tracks whether each popup was open before the window was minimized
     private bool _primaryWasOpen;
@@ -123,12 +139,16 @@ public partial class MapView : UserControl
         _vm.AircraftMoved  += (_, e) => Dispatcher.Invoke(() => UpdateAircraftMarker(e));
         MapCtrl.Info += OnMapInfo;
 
-        _airportLayer = new MemoryLayer { Name = "Airports", Style = AirportStyle };
-        _logbookLayer = new MemoryLayer { Name = "Logbook",  Style = LogbookStyle };
+        _airportLayer  = new MemoryLayer { Name = "Airports",      Style = AirportStyle  };
+        _greenRingLayer = new MemoryLayer { Name = "DepartedRings", Style = GreenRingStyle };
+        _redRingLayer   = new MemoryLayer { Name = "LandedRings",   Style = RedRingStyle  };
+        _logbookLayer  = new MemoryLayer { Name = "Logbook",       Style = LogbookStyle  };
 
         var map = new Mapsui.Map();
         map.Layers.Add(OpenStreetMap.CreateTileLayer());
         map.Layers.Add(_airportLayer);
+        map.Layers.Add(_greenRingLayer);
+        map.Layers.Add(_redRingLayer);
         map.Layers.Add(_logbookLayer);
 
         MapCtrl.Map = map;
@@ -253,7 +273,30 @@ public partial class MapView : UserControl
         _logbookLayer.Features = airports.Select(MakeFeature).ToList();
         _logbookLayer.DataHasChanged();
         _logbookCount = airports.Count;
+        RefreshRingLayers();
         UpdateStatus();
+    }
+
+    private void RefreshRingLayers()
+    {
+        if (_vm is null || _greenRingLayer is null || _redRingLayer is null) return;
+
+        var departed = _vm.GetDepartedAirports();
+        var landed   = _vm.GetLandedAirports();
+        var departedIcaos = departed.Select(a => a.Icao).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        _greenRingLayer.Features = departed.Select(MakeFeature).ToList();
+
+        _redRingLayer.Features = landed.Select(a =>
+        {
+            var f = MakeFeature(a);
+            if (departedIcaos.Contains(a.Icao))
+                f["ring_outer"] = true;
+            return f;
+        }).ToList();
+
+        _greenRingLayer.DataHasChanged();
+        _redRingLayer.DataHasChanged();
     }
 
     private void RefreshAirportLayer()
@@ -283,9 +326,9 @@ public partial class MapView : UserControl
 
     private void OnMapInfo(object? sender, MapInfoEventArgs e)
     {
-        if (_airportLayer is null || _logbookLayer is null) return;
+        if (_airportLayer is null || _logbookLayer is null || _greenRingLayer is null || _redRingLayer is null) return;
 
-        var feature = e.GetMapInfo(new[] { _logbookLayer, _airportLayer })?.Feature;
+        var feature = e.GetMapInfo(new[] { _logbookLayer, _greenRingLayer, _redRingLayer, _airportLayer })?.Feature;
 
         if (feature is null)
         {
@@ -553,19 +596,34 @@ public partial class MapView : UserControl
 
     // ---- Zoom-aware circle style ----
 
+    // Maps Mapsui resolution to a symbol scale shared by all circle/ring styles.
+    private static double CircleScaleForResolution(double resolution)
+    {
+        const double minScale = 0.12;
+        const double maxScale = 0.50;
+        const double logMin   = 9.21;
+        const double logMax   = 14.73;
+        var log = Math.Log(Math.Clamp(resolution, 10_000, 2_500_000));
+        var t   = (log - logMin) / (logMax - logMin);
+        return maxScale - t * (maxScale - minScale);
+    }
+
     private sealed class ZoomCircleStyle : BaseStyle, IThemeStyle
     {
         private readonly MapsuiColor _fill;
         private readonly MapsuiColor _outline;
         private readonly float _outlineWidth;
+        private readonly double _scaleMultiplier;
         private SymbolStyle? _cached;
         private double _cachedResolution = -1;
 
-        public ZoomCircleStyle(MapsuiColor fill, MapsuiColor outline, float outlineWidth)
+        // Pass null fill for a transparent (ring-only) style.
+        public ZoomCircleStyle(MapsuiColor? fill, MapsuiColor outline, float outlineWidth, double scaleMultiplier = 1.0)
         {
-            _fill         = fill;
-            _outline      = outline;
-            _outlineWidth = outlineWidth;
+            _fill            = fill ?? new MapsuiColor(0, 0, 0, 0);
+            _outline         = outline;
+            _outlineWidth    = outlineWidth;
+            _scaleMultiplier = scaleMultiplier;
         }
 
         public IStyle? GetStyle(IFeature feature, Viewport viewport)
@@ -581,20 +639,52 @@ public partial class MapView : UserControl
                 Fill        = new MapsuiBrush(_fill),
                 Outline     = new MapsuiPen(_outline, _outlineWidth),
                 Line        = null,
-                SymbolScale = ScaleForResolution(res),
+                SymbolScale = CircleScaleForResolution(res) * _scaleMultiplier,
             };
             return _cached;
         }
+    }
 
-        private static double ScaleForResolution(double resolution)
+    // Ring style for landed airports: inner position when landed-only, outer when also departed.
+    // Features with feature["ring_outer"] == true use the outer (larger) scale.
+    private sealed class RingStyle : BaseStyle, IThemeStyle
+    {
+        private readonly MapsuiColor _color;
+        private readonly float _outlineWidth;
+        private readonly double _innerMultiplier;
+        private readonly double _outerMultiplier;
+        private SymbolStyle? _cachedInner;
+        private SymbolStyle? _cachedOuter;
+        private double _cachedResolution = -1;
+
+        public RingStyle(MapsuiColor color, float outlineWidth, double innerMultiplier, double outerMultiplier)
         {
-            const double minScale = 0.12;
-            const double maxScale = 0.50;
-            const double logMin   = 9.21;
-            const double logMax   = 14.73;
-            var log = Math.Log(Math.Clamp(resolution, 10_000, 2_500_000));
-            var t   = (log - logMin) / (logMax - logMin);
-            return maxScale - t * (maxScale - minScale);
+            _color           = color;
+            _outlineWidth    = outlineWidth;
+            _innerMultiplier = innerMultiplier;
+            _outerMultiplier = outerMultiplier;
         }
+
+        public IStyle? GetStyle(IFeature feature, Viewport viewport)
+        {
+            var res = viewport.Resolution;
+            if (_cachedInner is null ||
+                Math.Abs(res - _cachedResolution) / Math.Max(1.0, _cachedResolution) >= 0.05)
+            {
+                _cachedResolution = res;
+                var baseScale = CircleScaleForResolution(res);
+                _cachedInner = MakeSymbol(baseScale * _innerMultiplier);
+                _cachedOuter = MakeSymbol(baseScale * _outerMultiplier);
+            }
+            return (feature["ring_outer"] as bool? == true) ? _cachedOuter : _cachedInner;
+        }
+
+        private SymbolStyle MakeSymbol(double scale) => new SymbolStyle
+        {
+            Fill        = new MapsuiBrush(new MapsuiColor(0, 0, 0, 0)),
+            Outline     = new MapsuiPen(_color, _outlineWidth),
+            Line        = null,
+            SymbolScale = scale,
+        };
     }
 }

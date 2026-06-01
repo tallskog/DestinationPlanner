@@ -145,6 +145,26 @@
 
 ---
 
+## US26: Departure / landing status rings on the map
+**As a pilot**, I want visited airports on the map to visually distinguish whether I departed from them, landed at them, or both, so I can see my flight history at a glance without opening the logbook.
+
+**Acceptance criteria:**
+- A visited airport from which I departed has a green ring drawn around the orange dot
+- A visited airport at which I landed has a red ring drawn around the orange dot
+- An airport where I both departed and landed shows both rings; the green ring is inner (closer to the dot) and the red ring is outer, with a small gap between the two rings
+- All active map filters (runway, ILS, ATIS, radius, ICAO prefix) apply equally to the ring layers and the orange dot layer
+- A "Map Legend" panel in the sidebar explains all five symbol states: unvisited (blue dot), visited (orange dot), departed (green ring), landed (red ring), and departed & landed (both rings)
+- Clicking anywhere within a ring (not just the central dot) opens the airport info popup
+
+---
+
+## BUG-05: Map filters not applied to visited-airport layers
+**Root cause:** `GetLogbookAirports()` applied only the radius and ICAO-prefix filters to visited airports. The runway length, ILS, and ATIS filters were intentionally skipped (with a comment calling them "destination-search criteria"). This meant setting a minimum runway length still left short-runway airports visible on the map as orange dots.
+
+**Fix:** All filter criteria (radius, runway min/max, ILS, ATIS, ICAO prefix) are now applied uniformly via a shared `ApplySharedFilters` helper used by `GetLogbookAirports`, `GetDepartedAirports`, and `GetLandedAirports`.
+
+---
+
 ## BUG-01: Runway CSV column mapping
 **Root cause:** `AirportDataService.ApplyRunwayData` read columns 9/10/11 for LE heading/lat/lon and 15/16/17 for HE heading/lat/lon. The actual OurAirports runways.csv header places coordinates at 9/10 and headings at 12/18 (with elevation fields at 11/17 between them). The code treated latitude as heading and elevation as longitude, placing every runway in the wrong location (e.g. EFTU appeared near Japan, producing 14 million ft centerline deviation).
 

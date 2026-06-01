@@ -95,6 +95,69 @@
                 <Button Content="Clear"         Command="{Binding ClearFiltersCommand}" Padding="10,3" Margin="6,0,0,0"/>
             </StackPanel>
 
+            <GroupBox DockPanel.Dock="Top" Header="Map Legend" Margin="0,6,0,4" Padding="6,4">
+                <StackPanel>
+
+                    <!-- Unvisited airport: plain blue dot -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" VerticalAlignment="Center">
+                        <Grid Width="22" Height="22">
+                            <Ellipse Width="9" Height="9" Fill="#1E78C8"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="Unvisited airport" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Visited airport: plain orange dot -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" VerticalAlignment="Center">
+                        <Grid Width="22" Height="22">
+                            <Ellipse Width="9" Height="9" Fill="#DC6400"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="Visited airport" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Departed from: orange dot + green ring -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" VerticalAlignment="Center">
+                        <Grid Width="22" Height="22">
+                            <Ellipse Width="18" Height="18" Fill="Transparent"
+                                     Stroke="#28C83C" StrokeThickness="2"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Ellipse Width="9" Height="9" Fill="#DC6400"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="Departed from" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Landed at: orange dot + red ring -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,5" VerticalAlignment="Center">
+                        <Grid Width="22" Height="22">
+                            <Ellipse Width="18" Height="18" Fill="Transparent"
+                                     Stroke="#C82828" StrokeThickness="2"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Ellipse Width="9" Height="9" Fill="#DC6400"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="Landed at" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Both departed and landed: orange dot + green inner ring + red outer ring -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid Width="22" Height="22">
+                            <Ellipse Width="20" Height="20" Fill="Transparent"
+                                     Stroke="#C82828" StrokeThickness="2"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Ellipse Width="13" Height="13" Fill="Transparent"
+                                     Stroke="#28C83C" StrokeThickness="2"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Ellipse Width="6" Height="6" Fill="#DC6400"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="Departed and landed" FontSize="11" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                </StackPanel>
+            </GroupBox>
+
             <TextBlock x:Name="MapStatus" DockPanel.Dock="Bottom"
                        Margin="4,8,4,0" FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap"/>
         </DockPanel>

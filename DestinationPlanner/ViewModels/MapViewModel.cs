@@ -184,7 +184,8 @@ public class MapViewModel : ViewModelBase
     }
 
     // Airports in the logbook — looked up by ICAO for lat/lon.
-    // Radius filter is applied when active; runway/ILS filters are not (those are destination-search criteria).
+    // All active filters (radius, runway, ILS, ATIS, ICAO prefix) are applied so the
+    // orange dots stay consistent with what the airport layer shows.
     public IReadOnlyList<Airport> GetLogbookAirports()
     {
         if (!_airports.IsLoaded || !_showVisited) return [];
@@ -195,19 +196,73 @@ public class MapViewModel : ViewModelBase
             .Select(icao => _airports.GetByIcao(icao))
             .OfType<Airport>();
 
+        candidates = ApplySharedFilters(candidates);
+        if (candidates is null) return [];
+
+        return candidates.ToList();
+    }
+
+    public IReadOnlyList<Airport> GetDepartedAirports()
+    {
+        if (!_airports.IsLoaded || !_showVisited) return [];
+
+        IEnumerable<Airport> candidates = _logbook.Flights
+            .Select(f => f.DepartureIcao)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(icao => _airports.GetByIcao(icao))
+            .OfType<Airport>();
+
+        candidates = ApplySharedFilters(candidates);
+        if (candidates is null) return [];
+
+        return candidates.ToList();
+    }
+
+    public IReadOnlyList<Airport> GetLandedAirports()
+    {
+        if (!_airports.IsLoaded || !_showVisited) return [];
+
+        IEnumerable<Airport> candidates = _logbook.Flights
+            .Select(f => f.ArrivalIcao)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(icao => _airports.GetByIcao(icao))
+            .OfType<Airport>();
+
+        candidates = ApplySharedFilters(candidates);
+        if (candidates is null) return [];
+
+        return candidates.ToList();
+    }
+
+    // Applies radius, runway, ILS, ATIS, and ICAO-prefix filters shared by all logbook layers.
+    // Returns null when the radius center ICAO is configured but not found in airport data.
+    private IEnumerable<Airport>? ApplySharedFilters(IEnumerable<Airport> candidates)
+    {
         if (!string.IsNullOrWhiteSpace(_filterCenterIcao) && _filterRadiusNm > 0)
         {
             var center = _airports.GetByIcao(_filterCenterIcao.Trim());
-            if (center is null) return [];
+            if (center is null) return null;
             candidates = candidates
                 .Where(a => GeoHelper.DistanceNm(center.Latitude, center.Longitude, a.Latitude, a.Longitude) <= _filterRadiusNm);
         }
+
+        if (RequireInstrumentApproach)
+            candidates = candidates.Where(a => a.HasInstrumentApproach);
+
+        if (RequireAtis)
+            candidates = candidates.Where(a => a.HasAtis);
+
+        int minFt = UseMeters ? GeoHelper.MetersToFeet(MinRunway) : MinRunway;
+        int maxFt = UseMeters ? GeoHelper.MetersToFeet(MaxRunway) : MaxRunway;
+
+        if (minFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= minFt);
+        if (maxFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= maxFt);
 
         var prefixes = ParseIcaoPrefixes(_icaoPrefixes);
         if (prefixes.Count > 0)
             candidates = candidates.Where(a => prefixes.Any(p => a.Icao.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
 
-        return candidates.ToList();
+        return candidates;
     }
 
     private static IReadOnlyList<string> ParseIcaoPrefixes(string raw) =>
