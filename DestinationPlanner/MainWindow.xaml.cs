@@ -175,6 +175,56 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void DownloadAirportData_Click(object sender, RoutedEventArgs e)
+    {
+        const string baseUrl = "https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/";
+        var files = new[]
+        {
+            ("airports.csv",            true),
+            ("runways.csv",             false),
+            ("airport-frequencies.csv", false),
+        };
+
+        IsEnabled = false;
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+            foreach (var (filename, required) in files)
+            {
+                string dest = Path.Combine(AppDataHelper.AppDataPath, filename);
+                try
+                {
+                    var bytes = await http.GetByteArrayAsync(baseUrl + filename);
+                    await File.WriteAllBytesAsync(dest, bytes);
+                }
+                catch when (!required)
+                {
+                    // optional file — skip silently
+                }
+            }
+
+            string airportsCsv     = Path.Combine(AppDataHelper.AppDataPath, "airports.csv");
+            string? runwaysCsv     = NullIfMissing(Path.Combine(AppDataHelper.AppDataPath, "runways.csv"));
+            string? frequenciesCsv = NullIfMissing(Path.Combine(AppDataHelper.AppDataPath, "airport-frequencies.csv"));
+
+            var vm = (MainViewModel)DataContext;
+            await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
+            vm.Map.NotifyAirportDataLoaded();
+
+            MessageBox.Show("Airport data downloaded and loaded successfully.", "Download complete",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Download failed:\n{ex.Message}", "Error",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+        }
+    }
+
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
     private static string? NullIfMissing(string path) => File.Exists(path) ? path : null;

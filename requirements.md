@@ -56,3 +56,8 @@ US21: [DONE] The logbook view shall display the most recent flight at the top (s
 US22: [DONE] After importing a foreign logbook, newly added rows shall be highlighted in light green in the logbook view. The highlight is session-only (not persisted) and is cleared when the user clicks "Clear Filters".
 US23: [DONE] Duplicate detection during import shall handle the case where the same flight exists with non-overlapping but similar block times (same date, same route, duration within 3 minutes). The original internal logbook entry shall be kept.
 US24: [DONE] User shall be able to switch the active logbook at runtime via File → Open Logbook… without restarting the application.
+US25: [DONE] User shall be able to download airport data directly from within the application without manually downloading and selecting CSV files.
+US25.1: [DONE] The application shall provide a "Download Airport Data" menu item under File that fetches airports.csv, runways.csv, and airport-frequencies.csv from the OurAirports GitHub repository (https://github.com/davidmegginson/ourairports-data).
+US25.2: [DONE] The downloaded files shall be saved to the AppData folder, overwriting any existing files, and loaded immediately after download.
+US25.3: [DONE] If optional files (runways.csv, airport-frequencies.csv) fail to download, the error shall be silently ignored and only airports.csv is required to succeed.
+US25.4: [DONE] The application window shall be disabled during the download to prevent concurrent operations.

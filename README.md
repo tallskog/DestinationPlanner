@@ -51,7 +51,13 @@ The output in `publish/` can be run on any Windows 10/11 machine without the .NE
 
 ## Airport data setup
 
-The map tab requires airport data from [OurAirports](https://ourairports.com/data/):
+The map tab requires airport data from [OurAirports](https://ourairports.com/data/). There are two ways to load it:
+
+### Option A — Download in-app (recommended)
+
+**File → Download Airport Data** — downloads `airports.csv`, `runways.csv`, and `airport-frequencies.csv` directly from the [OurAirports GitHub repository](https://github.com/davidmegginson/ourairports-data) and loads them automatically. Requires an internet connection.
+
+### Option B — Manual file selection
 
 1. Download **airports.csv** from `https://ourairports.com/data/airports.csv`
 2. Download **runways.csv** from `https://ourairports.com/data/runways.csv` (needed for runway-length filtering)
