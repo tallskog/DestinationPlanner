@@ -17,7 +17,20 @@ public record NavigraphCredentials(string ClientId, string ClientSecret)
 
         try
         {
-            var creds = JsonSerializer.Deserialize<NavigraphCredentials>(File.ReadAllText(path), _readOptions);
+            return ParseJson(File.ReadAllText(path));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Extracted so the parsing logic can be unit tested without touching AppData.
+    internal static NavigraphCredentials? ParseJson(string json)
+    {
+        try
+        {
+            var creds = JsonSerializer.Deserialize<NavigraphCredentials>(json, _readOptions);
             if (creds is null || string.IsNullOrWhiteSpace(creds.ClientId) || string.IsNullOrWhiteSpace(creds.ClientSecret))
                 return null;
             return creds;

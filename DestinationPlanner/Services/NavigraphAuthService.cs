@@ -13,12 +13,17 @@ public class NavigraphAuthService : INavigraphAuthService
     private const string TokenEndpoint = "https://identity.api.navigraph.com/connect/token";
     private const string Scope = "openid offline_access fmsdata";
 
-    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
-
+    private readonly HttpClient _http;
     private readonly NavigraphCredentials? _credentials;
     private string? _codeVerifier;
 
-    public NavigraphAuthService(NavigraphCredentials? credentials) => _credentials = credentials;
+    // httpClient is an injection seam for tests (a fake HttpMessageHandler) — in
+    // production a single instance is created once here and reused for the app's lifetime.
+    public NavigraphAuthService(NavigraphCredentials? credentials, HttpClient? httpClient = null)
+    {
+        _credentials = credentials;
+        _http = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+    }
 
     public bool IsConfigured => _credentials is not null;
 

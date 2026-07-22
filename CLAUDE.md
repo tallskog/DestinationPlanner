@@ -2,7 +2,7 @@
 
 ## Project overview
 C# .NET 8 WPF application. MSFS 2024 flight logbook with SimConnect integration and Mapsui map.
-Solution: `DestinationPlanner.sln`, project: `DestinationPlanner/DestinationPlanner.csproj`.
+Solution: `DestinationPlanner.slnx`, project: `DestinationPlanner/DestinationPlanner.csproj`, test project: `DestinationPlanner.Tests/DestinationPlanner.Tests.csproj`.
 
 ## Key architecture
 - **SimConnect**: window-message-based, 1 Hz data via `SimConnectService`. SimData struct uses `LayoutKind.Sequential, Pack=1` — field order must match `AddToDataDefinition` call order exactly.
@@ -25,9 +25,16 @@ This keeps dev and installed-release logbooks completely separate.
 ## Requirements tracking
 - When a plan is finalized and approved, update `DestinationPlanner/requirements.md` with the user stories and acceptance criteria from the plan before starting implementation.
 - Plan must not break the existing requirements. If new requirement conflicts with an older requirement, it must be checked which one to follow or modify existing accordingly.
+- `requirements.md` should also reflect what automated test coverage each requirement needs (or already has) — see Testing section below.
 
 ## README.md
-- `DestinationPlanner/README.md` must be checked and updated if needed every time when implementing a change
+- `README.md` (repo root) must be checked and updated if needed every time when implementing a change
+
+## Testing
+- Test project: `DestinationPlanner.Tests` (xUnit), run with `dotnet test DestinationPlanner.slnx`.
+- Whenever you make a code change, run `dotnet test` automatically and verify all tests pass before considering the task done — do not wait to be asked.
+- **If any unit test fails, or a new requirement conflicts with an existing one in `requirements.md`, stop and consult the user before proceeding.** Do not silently weaken/delete a test or unilaterally pick which requirement "wins" — surface the conflict and let the user decide.
+- Prefer testing pure logic and ViewModels via fakes (see `DestinationPlanner.Tests/Fakes`) over real I/O, SimConnect, or network calls. UI rendering and live SimConnect/MSFS behavior are verified manually, not by automated tests.
 
 ## Mapsui 5.0.2 gotchas
 - `SymbolStyle` is available; `VectorStyle` is an alternative.
@@ -35,4 +42,4 @@ This keeps dev and installed-release logbooks completely separate.
 - `Map.ViewportInitialized` event for initial centering.
 
 ## Build
-`dotnet build DestinationPlanner/DestinationPlanner.csproj` — must pass with zero errors before marking any task done. The 9 NU1701 warnings about OpenTK are pre-existing and can be ignored.
+`dotnet build DestinationPlanner/DestinationPlanner.csproj` (or `dotnet build DestinationPlanner.slnx` to include the test project) — must pass with zero errors before marking any task done. The NU1701 warnings about OpenTK are pre-existing and can be ignored.

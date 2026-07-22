@@ -50,6 +50,14 @@ dotnet publish DestinationPlanner/DestinationPlanner.csproj \
 
 The output in `publish/` can be run on any Windows 10/11 machine without the .NET runtime installed.
 
+## Running tests
+
+```bash
+dotnet test DestinationPlanner.slnx
+```
+
+Tests live in `DestinationPlanner.Tests` (xUnit) and cover pure logic and ViewModel behavior — filter logic, CSV/SQLite parsing, DPAPI token round-trips, and the Navigraph sign-in state machine — using fakes for `IAirportDataService`/`ILogbookService`/`ISimConnectService`/`INavigraphAuthService` rather than real I/O or SimConnect. UI rendering and live SimConnect/MSFS behavior aren't covered by automated tests and should be verified manually.
+
 ## Airport data setup
 
 The map tab requires airport data from [OurAirports](https://ourairports.com/data/). There are two ways to load it:
@@ -157,6 +165,12 @@ DestinationPlanner/
 ├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter, LittleNavmapCsvImporter
 ├── Schemas/         NativeLogbook.xsd, ForeignLogbook.xsd
 └── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper, AppSettings, AppSettingsService, NavigraphTokenStore
+
+DestinationPlanner.Tests/
+├── Services/        AirportDataService, NavigraphDataService, NavigraphCredentials tests
+├── Helpers/         NavigraphTokenStore tests
+├── ViewModels/      MapViewModel filter tests, NavigraphSignInViewModel tests
+└── Fakes/           Hand-rolled fakes for IAirportDataService, ILogbookService, ISimConnectService, INavigraphAuthService
 ```
 
 ## Native logbook XML format

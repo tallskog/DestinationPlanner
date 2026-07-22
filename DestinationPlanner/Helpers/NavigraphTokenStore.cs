@@ -13,9 +13,7 @@ public static class NavigraphTokenStore
     {
         try
         {
-            byte[] protectedBytes = ProtectedData.Protect(
-                Encoding.UTF8.GetBytes(refreshToken), null, DataProtectionScope.CurrentUser);
-            settings.NavigraphRefreshTokenProtected = Convert.ToBase64String(protectedBytes);
+            settings.NavigraphRefreshTokenProtected = Protect(refreshToken);
             AppSettingsService.Save(settings);
         }
         catch { }
@@ -24,22 +22,34 @@ public static class NavigraphTokenStore
     public static string? TryLoad(AppSettings settings)
     {
         if (settings.NavigraphRefreshTokenProtected is not { } base64) return null;
-
-        try
-        {
-            byte[] bytes = ProtectedData.Unprotect(
-                Convert.FromBase64String(base64), null, DataProtectionScope.CurrentUser);
-            return Encoding.UTF8.GetString(bytes);
-        }
-        catch
-        {
-            return null;
-        }
+        return Unprotect(base64);
     }
 
     public static void Clear(AppSettings settings)
     {
         settings.NavigraphRefreshTokenProtected = null;
         AppSettingsService.Save(settings);
+    }
+
+    // Extracted so the DPAPI round-trip can be unit tested without touching settings.json.
+    internal static string Protect(string plainText)
+    {
+        byte[] protectedBytes = ProtectedData.Protect(
+            Encoding.UTF8.GetBytes(plainText), null, DataProtectionScope.CurrentUser);
+        return Convert.ToBase64String(protectedBytes);
+    }
+
+    internal static string? Unprotect(string protectedBase64)
+    {
+        try
+        {
+            byte[] bytes = ProtectedData.Unprotect(
+                Convert.FromBase64String(protectedBase64), null, DataProtectionScope.CurrentUser);
+            return Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

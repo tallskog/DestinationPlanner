@@ -59,7 +59,10 @@ public class NavigraphDataService : INavigraphDataService
     {
         var result = new Dictionary<string, AirportType>(StringComparer.OrdinalIgnoreCase);
 
-        using var connection = new SqliteConnection($"Data Source={sqliteFilePath};Mode=ReadOnly");
+        // Pooling=False: this connection is opened once and closed immediately after the
+        // read below — pooling would otherwise keep a file handle open in the background,
+        // which can make the old-file cleanup in PruneOldPackages silently fail to delete.
+        using var connection = new SqliteConnection($"Data Source={sqliteFilePath};Mode=ReadOnly;Pooling=False");
         connection.Open();
 
         using var command = connection.CreateCommand();

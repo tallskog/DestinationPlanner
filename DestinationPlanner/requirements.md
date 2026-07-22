@@ -260,3 +260,34 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 - Whether `tbl_pa_airports.airport_type` ever contains codes other than `C`/`M`/`P` in real data is unconfirmed (the `Unknown` fallback in `NavigraphDataService.ParseAirportTypes` should never trigger under normal use, but this is unverified).
 - End-to-end device-flow sign-in, package download, and `.3sdb` parsing have not been tested against genuine Navigraph data.
 - Multi-day refresh-token rotation behavior has not been verified under real usage.
+
+---
+
+## US35: Automated test coverage for core logic
+**As a developer**, I want automated unit tests for the app's non-UI logic so that regressions are caught before they reach a manual test pass.
+
+**Acceptance criteria:**
+- An xUnit test project (`DestinationPlanner.Tests`) exists alongside the main project, referenced from `DestinationPlanner.slnx`, and runs via `dotnet test`
+- Tests exercise pure logic and ViewModels via fakes for `IAirportDataService`, `ILogbookService`, `ISimConnectService`, and `INavigraphAuthService` — no real file I/O, network calls, or SimConnect/MSFS dependency
+- `dotnet test` is run automatically whenever code changes are made (see CLAUDE.md Testing section) and must pass before a task is considered done
+- If a test fails, or a new requirement would conflict with an existing one here, the user is consulted before proceeding — never silently resolved
+
+**Coverage — implemented (101 tests as of the US35 backlog pass):**
+- `AirportDataService.ApplyAirportTypes` — merge-by-ICAO, unmatched ICAOs stay Unclassified, case-insensitive lookup
+- `Airport.Type` defaults to `Unclassified`
+- `AirportDataService` CSV parsing (`ParseAirports`, `ApplyRunwayData`, `ApplyFrequencyData`) — instrument-approach heuristic per airport type/scheduled-service, malformed/short rows skipped, closed runways excluded, runway sort/longest-runway, ATIS frequency detection, and a regression guard for BUG-01's runway endpoint column mapping — US13, BUG-01
+- `NavigraphDataService.ParseAirportTypes` — ARINC code → `AirportType` mapping (C/M/P/unrecognized/null), case-insensitive ICAO keys
+- `NavigraphCredentials.ParseJson` — valid/missing/malformed/whitespace-only JSON handling
+- `NavigraphTokenStore.Protect`/`Unprotect` — DPAPI round-trip, invalid input returns null instead of throwing
+- `NavigraphAuthService` — device-flow field/endpoint correctness, a genuine PKCE round-trip check (SHA256(verifier) recomputed and compared against the code_challenge actually sent), authorization_pending retry, access_denied/expired_token/unrecognized error mapping, local device-code-expiry without contacting the server, cancellation, and refresh-token grant — made testable via a small refactor: `HttpClient` is now injected (defaults to a real client in production) instead of a hardcoded static instance, using a fake `HttpMessageHandler` in tests
+- `MapViewModel` airport-type filter — default-all-visible, per-type exclusion, `ClearFiltersCommand` reset, and parity between `GetAllFilteredAirports()` and the shared `ApplySharedFilters()` path used by logbook/departed/landed layers (guards against a BUG-05-style regression)
+- `NavigraphSignInViewModel` state machine — Success/Denied/Expired/Error/Cancelled transitions, `Completed` event firing once
+- `GeoHelper` — `DistanceNm` (zero/symmetry/1-degree sanity range), `FeetToMeters`/`MetersToFeet` rounding, Mercator round-trip and the standard EPSG:3857 bound — US3, US5.1
+- `LandingRatingHelper` — `ComputeBreakdown`/`ComputeStars` for each of the six scoring components at their flat (perfect/zero) regions plus one linear-interpolation region, missing-component display, and `Enrich`'s crosswind/runway-geometry/star assignment — US29
+- `NativeLogbookSerializer` — full round-trip, omit-if-null on unset landing fields, loading a pre-v1.2 file with none of the extended landing elements, silently ignoring a legacy `AircraftType` element, and skipping one malformed `<Flight>` record without losing the rest of the file — US8, US-BC2, US-BC3
+- `ForeignLogbookImporter` — date/time parsing, same-airport skip (US7), missing-field skip, and midnight-crossing arrival time — US9
+- `LittleNavmapCsvImporter` — offset-aware UTC conversion, coordinate-style waypoint skip, same-airport skip, missing-required-column error, quoted-CSV-field parsing, and the `$$:`/`ATCCOM` aircraft-name cleanup rules — US19
+
+**Coverage — not yet implemented (backlog):**
+- UI rendering (XAML bindings, Mapsui layers, popups) and live SimConnect/MSFS behavior — verified manually, not by automated tests (see CLAUDE.md Testing section)
+- `NavigraphDataService.DownloadCurrentPackageAsync` (package discovery + download) — same `HttpClient`-injection pattern as `NavigraphAuthService` would apply if this becomes worth testing before real Navigraph API access is confirmed
