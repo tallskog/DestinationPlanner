@@ -9,5 +9,6 @@ public class Airport
     public int LongestRunwayFt { get; set; }
     public bool HasInstrumentApproach { get; set; }
     public bool HasAtis { get; set; }
+    public AirportType Type { get; set; } = AirportType.Unclassified;
     public List<Runway> Runways { get; set; } = [];
 }

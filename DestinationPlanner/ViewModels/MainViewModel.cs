@@ -14,6 +14,12 @@ public class MainViewModel : ViewModelBase
 
     public ISimConnectService SimConnect { get; }
 
+    // Navigraph airport-type integration (US34). Fully optional — see NavigraphCredentials.
+    public INavigraphAuthService NavigraphAuth { get; }
+    public INavigraphDataService NavigraphData { get; }
+    public NavigraphSessionState NavigraphSession { get; } = new();
+    public AppSettings Settings { get; }
+
     private string _simStatus = "MSFS: Not connected";
     public string SimStatus { get => _simStatus; private set => SetField(ref _simStatus, value); }
 
@@ -33,6 +39,9 @@ public class MainViewModel : ViewModelBase
         }
 
         AirportData = new AirportDataService();
+        Settings = settings;
+        NavigraphAuth = new NavigraphAuthService(NavigraphCredentials.TryLoad());
+        NavigraphData = new NavigraphDataService();
 
         var sim = new SimConnectService(AirportData, settings.SimDataRateHz);
         sim.FlightCompleted   += (_, record) => logbook.AddFlight(record);

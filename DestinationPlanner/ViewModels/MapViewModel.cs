@@ -20,6 +20,10 @@ public class MapViewModel : ViewModelBase
     private double _filterRadiusNm;
     private bool _showVisited = true;
     private bool _showNotVisited = true;
+    private bool _showCivilAirports = true;
+    private bool _showMilitaryAirports = true;
+    private bool _showPrivateAirports = true;
+    private bool _showUnclassifiedAirports = true;
     private string _icaoPrefixes = string.Empty;
     private string _airportDataStatus = "Airport data not loaded";
     private string _searchText = string.Empty;
@@ -54,6 +58,10 @@ public class MapViewModel : ViewModelBase
     public double FilterRadiusNm { get => _filterRadiusNm; set => SetField(ref _filterRadiusNm, value); }
     public bool ShowVisited { get => _showVisited; set => SetField(ref _showVisited, value); }
     public bool ShowNotVisited { get => _showNotVisited; set => SetField(ref _showNotVisited, value); }
+    public bool ShowCivilAirports { get => _showCivilAirports; set => SetField(ref _showCivilAirports, value); }
+    public bool ShowMilitaryAirports { get => _showMilitaryAirports; set => SetField(ref _showMilitaryAirports, value); }
+    public bool ShowPrivateAirports { get => _showPrivateAirports; set => SetField(ref _showPrivateAirports, value); }
+    public bool ShowUnclassifiedAirports { get => _showUnclassifiedAirports; set => SetField(ref _showUnclassifiedAirports, value); }
     public string IcaoPrefixes { get => _icaoPrefixes; set => SetField(ref _icaoPrefixes, value); }
 
     public string AirportDataStatus
@@ -165,6 +173,8 @@ public class MapViewModel : ViewModelBase
         if (minFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= minFt);
         if (maxFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= maxFt);
 
+        candidates = ApplyAirportTypeFilter(candidates);
+
         if (!_showVisited || !_showNotVisited)
         {
             var visited = _logbook.Flights
@@ -258,11 +268,30 @@ public class MapViewModel : ViewModelBase
         if (minFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= minFt);
         if (maxFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= maxFt);
 
+        candidates = ApplyAirportTypeFilter(candidates);
+
         var prefixes = ParseIcaoPrefixes(_icaoPrefixes);
         if (prefixes.Count > 0)
             candidates = candidates.Where(a => prefixes.Any(p => a.Icao.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
 
         return candidates;
+    }
+
+    // Airport-type (civil/military/private/unclassified) filter shared by GetAllFilteredAirports
+    // and ApplySharedFilters. All-checked (the default) is a no-op, so the app behaves exactly
+    // as before for anyone who has never synced Navigraph data (every airport is Unclassified).
+    private IEnumerable<Airport> ApplyAirportTypeFilter(IEnumerable<Airport> candidates)
+    {
+        if (_showCivilAirports && _showMilitaryAirports && _showPrivateAirports && _showUnclassifiedAirports)
+            return candidates;
+
+        return candidates.Where(a => a.Type switch
+        {
+            AirportType.Civil => _showCivilAirports,
+            AirportType.Military => _showMilitaryAirports,
+            AirportType.Private => _showPrivateAirports,
+            _ => _showUnclassifiedAirports, // Unclassified and Unknown bucketed together
+        });
     }
 
     private static IReadOnlyList<string> ParseIcaoPrefixes(string raw) =>
@@ -283,6 +312,10 @@ public class MapViewModel : ViewModelBase
         FilterRadiusNm = 0;
         ShowVisited = true;
         ShowNotVisited = true;
+        ShowCivilAirports = true;
+        ShowMilitaryAirports = true;
+        ShowPrivateAirports = true;
+        ShowUnclassifiedAirports = true;
         IcaoPrefixes = string.Empty;
         FiltersApplied?.Invoke(this, EventArgs.Empty);
     }

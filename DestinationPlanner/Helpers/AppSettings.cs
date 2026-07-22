@@ -10,4 +10,10 @@ public class AppSettings
     // Path of the logbook that was active in the previous session.
     // Null means no session has been saved yet (first-run or cleared).
     public string? LastLogbookPath { get; set; }
+
+    // DPAPI-protected (CurrentUser scope), Base64-encoded Navigraph OAuth refresh token.
+    // Null means never signed in, or a previous refresh/decrypt attempt failed and the
+    // user must sign in again. See NavigraphTokenStore. Unlike the other settings above,
+    // this is a real credential, so it's encrypted at rest rather than stored as plain text.
+    public string? NavigraphRefreshTokenProtected { get; set; }
 }

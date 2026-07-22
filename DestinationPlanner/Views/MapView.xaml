@@ -54,6 +54,15 @@
                 </StackPanel>
             </GroupBox>
 
+            <GroupBox DockPanel.Dock="Top" Header="Airport Type" Margin="0,0,0,4" Padding="6,4">
+                <StackPanel>
+                    <CheckBox IsChecked="{Binding ShowCivilAirports}"        Content="Civil"        Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding ShowMilitaryAirports}"     Content="Military"     Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding ShowPrivateAirports}"      Content="Private"      Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding ShowUnclassifiedAirports}" Content="Unclassified"/>
+                </StackPanel>
+            </GroupBox>
+
             <GroupBox DockPanel.Dock="Top" Header="Visit Status" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
                     <CheckBox IsChecked="{Binding ShowVisited}"    Content="Show visited airports"     Margin="0,0,0,3"/>

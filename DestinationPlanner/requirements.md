@@ -1,6 +1,74 @@
 # DestinationPlanner — Requirements
 
+This file consolidates two requirement documents that had diverged (a flat list at the repo root and this structured file). Section 1 preserves the original flat list verbatim — its story numbers (`US1`–`US25.4`) are referenced directly in code comments (e.g. `US13`, `US15.1`–`US15.3`), so they are **not** renumbered. Section 2 preserves the original structured write-ups, renumbered to continue after `US25.4` (their original numbers were never referenced in code) so nothing collides.
+
 ---
+
+## 1. Core requirements (US1–US25.4)
+
+US1: Application shall be built using C#
+US2: WPF shall be used as a UI framework
+US3: Application shall have a map display that is possible to zoom in/out with mouse wheel, and drag around
+US4: Map shall show (higlighted) airports in the visible area
+US5: User is able to filter the airports
+US5.1: Based on runway length (can set min and max length)
+US5.1.1: User can select whether feets or meters is used when giving min and max runway length
+US5.2: Based on instrument approach capabilites of the airport
+US5.3: By first selecting certain airport and then giving a radius in nm
+US6: Application shall be able to connect to msfs2024 and collect information from a flight with following information
+US6.1: Date of flight
+US6.2: Type of the aircraft (aircraft, helicopter)
+US6.2: Time or releasing of the handbrake
+US6.3: Departure airport
+US6.4: Time of setting the handbrake after arrival
+US6.5: Arrival airport
+US6.6: Tracking of the flight is not needed
+US7: If depature and arrival are the same airport, the flight shall not be collected
+US8: All flights shall be stored to an external file (it shall be decided whether json or xml format shall be used), which will work as flight logbook for this application
+US9: User might have already lots of flights done, it shall be possible to import a logbook file (either in json or xml format) created by another application
+US9.1: When importing logbook, it shall be checked that no duplicates exists
+US10: User shall be able to investigate the logbook in text format by setting different kind of filters, se US6.1 - US6.5. This investigation shall be in another tab from the map
+US11: The airports found from the logbook shall be also indicated in map. The filters that can be used to investigate the logbook, shall also be available in map view
+US12: The application shall use appData/Local/DestinationPlanner folder to persistently store configuration, logbook and necessary airport information files. The folder shall be created if it doesn't exist when the app is started
+US13: When user ask app to load airport data, the files shall be copied to appdata folder and shall be used from there by default. If user wants to update the airport files, user will again ask the app to load airport data and app fill copy the files to appdata folder and overwrite the existing airport files
+US14: The logbook shall be written to appdata folder. Flight information shall be automatically stored to the file, user doesn't have to remember to save it. If no logbook exist in appdata folder, application shall create a default empty logbook. The default logbook name shall be logbook-<dd>-<mm>-<yyyy>.xml (current date shall be used in filename).
+US15: User shall have an option to import and export logbook in format known to application.
+US15.1: When importing, a new logbook shall be created. The filename format shall follow the same rules as with default logbook. If file already exists, a running number shall be inserted between the date and word "logbook"
+US15.2: When exporting, user shall be given an option to select where the logbook shall be written and possibly change the logbook file name
+US15.3: When there are more than one logbook file in appdata folder, application shall ask which one to use when starting up. If only one logbook file exists, app will use that automatically
+US16: When clicking an airport from a map, a popup window shall appear anchored near the airport marker. The popup shall show:
+US16.1: The ICAO code and name of the airport
+US16.2: Each individual runway with its length in feet (sorted longest first). If no runway data is available, "N/A" is shown.
+US16.3: The current METAR fetched from an external source (aviationweather.gov). While loading, "METAR: Loading…" is shown. If no METAR is available, "METAR: Not available" is shown.
+US17: It shall be possible to select two airports simultaneously.
+US17.1: Clicking the left mouse button on an airport opens a single primary popup (blue border). Any previously selected secondary airport is cleared.
+US17.2: Clicking Ctrl+left mouse button on an airport opens a secondary popup (orange border) alongside the primary. If no primary is selected yet, the clicked airport becomes the primary.
+US17.3: Clicking Ctrl+left mouse again replaces the secondary airport with the newly clicked one.
+US17.4: When two airports are selected, a dashed line is drawn between them on the map with the distance in nautical miles shown at the midpoint.
+US17.5: Both popups are anchored near their respective airport markers and move with the map when the user pans or zooms.
+US17.6: Clicking an empty area on the map closes both popups and clears the selection.
+US17.7: [DONE] Popups should follow the the window focus. If program is minimized, popup should follow. Also if another window is switched on top of this app, popups should not stay on top 
+US17.8: [DONE] If the main app window is moved, popups should follow and be anchored to airport
+US18: [DONE] I want to user to have a possibility to use search in map screen
+US18.1: [DONE] User could use ICAO code or airport name as search key
+US18.2: [DONE] Once user starts to enter search key, a list of airports found so far has been shown. List shall be updated after every key entered
+US18.3: [DONE] User will select the airport from the drop down list
+US18.4: [DONE] Once airport is selected, map will center and zoom in for the selected airport
+US19: [DONE] Application shall support importing logbooks exported from Little Navmap (CSV format) via the existing "Import Foreign Logbook" menu. Format is auto-detected from file extension.
+US20: [DONE] AircraftType (Airplane/Helicopter) shall be removed from the logbook data model. Existing logbook files that contain the element shall load without errors (element silently ignored).
+US21: [DONE] The logbook view shall display the most recent flight at the top (sorted by block-off time descending).
+US22: [DONE] After importing a foreign logbook, newly added rows shall be highlighted in light green in the logbook view. The highlight is session-only (not persisted) and is cleared when the user clicks "Clear Filters".
+US23: [DONE] Duplicate detection during import shall handle the case where the same flight exists with non-overlapping but similar block times (same date, same route, duration within 3 minutes). The original internal logbook entry shall be kept.
+US24: [DONE] User shall be able to switch the active logbook at runtime via File → Open Logbook… without restarting the application.
+US25: [DONE] User shall be able to download airport data directly from within the application without manually downloading and selecting CSV files.
+US25.1: [DONE] The application shall provide a "Download Airport Data" menu item under File that fetches airports.csv, runways.csv, and airport-frequencies.csv from the OurAirports GitHub repository (https://github.com/davidmegginson/ourairports-data).
+US25.2: [DONE] The downloaded files shall be saved to the AppData folder, overwriting any existing files, and loaded immediately after download.
+US25.3: [DONE] If optional files (runways.csv, airport-frequencies.csv) fail to download, the error shall be silently ignored and only airports.csv is required to succeed.
+US25.4: [DONE] The application window shall be disabled during the download to prevent concurrent operations.
+
+---
+
+## 2. Detailed feature specs & bug postmortems (US26–US34, BUG-01–BUG-05)
 
 ## US-BC1: Dev/Release logbook isolation
 **As a developer**, I want the debug build to use a separate AppData folder (`DestinationPlanner-dev\`) so that running the dev version never corrupts or interferes with the logbook used by the installed release version.
@@ -34,7 +102,7 @@
 
 ---
 
-## US19: Live aircraft position marker on map
+## US26: Live aircraft position marker on map
 **As a pilot**, I want to see a live airplane symbol (✈) on the map that tracks my aircraft's real-world position from the flight simulator, so I can see where I am at a glance.
 
 **Acceptance criteria:**
@@ -46,7 +114,7 @@
 
 ---
 
-## US20: Landing statistics capture
+## US27: Landing statistics capture
 **As a pilot**, I want the app to automatically record my landing quality (vertical speed, G-force, airspeed, and wind) at the moment of touchdown, so I can track my landings over time.
 
 **Acceptance criteria:**
@@ -58,7 +126,7 @@
 
 ---
 
-## US21: Landing statistics in logbook view
+## US28: Landing statistics in logbook view
 **As a pilot**, I want to see landing statistics as columns in the logbook flight list so I can compare landings across flights at a glance.
 
 **Acceptance criteria:**
@@ -71,7 +139,7 @@
 
 ---
 
-## US22: Landing quality rating
+## US29: Landing quality rating
 **As a pilot**, I want each flight to display a 1–5 star landing quality rating so I can quickly assess and compare my landings.
 
 **Acceptance criteria:**
@@ -88,7 +156,7 @@
 
 ---
 
-## US23: Landing rating detail popup
+## US30: Landing rating detail popup
 **As a pilot**, I want to click on a flight's star rating in the logbook to see a detailed breakdown of how the rating was calculated, so I can understand which aspects of the landing were good or needed improvement.
 
 **Acceptance criteria:**
@@ -97,11 +165,11 @@
 - Individual scores are colour-coded: green (≥80), orange (≥60), red (<60); components with no data show "N/A" in grey
 - The dialog shows the overall weighted score and the final star display (e.g. `★★★★☆`)
 - Flights with no rating data show `—`; clicking `—` does nothing (button disabled)
-- No new logbook fields are required — all data is already stored by US22
+- No new logbook fields are required — all data is already stored by US29
 
 ---
 
-## US24: Configurable SimConnect data sampling rate
+## US31: Configurable SimConnect data sampling rate
 **As a developer/user**, I want to control how frequently SimConnect data is sampled so that landing detection accuracy can be tuned without recompiling the application.
 
 **Acceptance criteria:**
@@ -113,14 +181,14 @@
 
 ---
 
-## US25: Persist last-used logbook across sessions
+## US32: Persist last-used logbook across sessions
 **As a user**, I want the application to remember which logbook I was using so that I do not have to select it again every time I start the app.
 
 **Acceptance criteria:**
 - On startup the app reads `LastLogbookPath` from `settings.json`; if the file exists on disk it is opened directly without showing any dialog
 - If the saved path no longer exists (file deleted/moved), the app falls back to the normal selection logic (auto-select if only one exists; show dialog if multiple exist)
 - After selecting a logbook via **File → Open Logbook…**, the new path is saved to `settings.json` immediately
-- The same `settings.json` file is used for all settings (US24)
+- The same `settings.json` file is used for all settings (US31)
 
 ---
 
@@ -145,7 +213,7 @@
 
 ---
 
-## US26: Departure / landing status rings on the map
+## US33: Departure / landing status rings on the map
 **As a pilot**, I want visited airports on the map to visually distinguish whether I departed from them, landed at them, or both, so I can see my flight history at a glance without opening the logbook.
 
 **Acceptance criteria:**
@@ -169,3 +237,26 @@
 **Root cause:** `AirportDataService.ApplyRunwayData` read columns 9/10/11 for LE heading/lat/lon and 15/16/17 for HE heading/lat/lon. The actual OurAirports runways.csv header places coordinates at 9/10 and headings at 12/18 (with elevation fields at 11/17 between them). The code treated latitude as heading and elevation as longitude, placing every runway in the wrong location (e.g. EFTU appeared near Japan, producing 14 million ft centerline deviation).
 
 **Fix:** Column indices corrected to: LE lat=9, lon=10, heading=12; HE lat=15, lon=16, heading=18. Existing logbook records that captured wrong geometry values are unaffected (stored values are not recomputed on load).
+
+---
+
+## US34: Airport civil/military/private classification via Navigraph
+**As a pilot**, I want to see whether an airport is civil, military, or privately operated, and filter the map by that classification, so I can plan flights around appropriate airport types.
+
+**Acceptance criteria:**
+- Classification data is sourced from Navigraph's Navigation Data API (DFD v2 format), matched to existing airports by ICAO code (ARINC 424 field 5.177, "Public/Military Indicator")
+- Airports with no Navigraph classification data available show as "Unclassified" and remain visible by default — the app behaves exactly as before for users who never sign in to Navigraph
+- A new "Airport Type" filter group in the map sidebar offers Civil / Military / Private / Unclassified checkboxes, all checked by default
+- The Airport Type filter applies uniformly to all map layers (all airports, logbook, departed, landed) via the same shared filter logic used by the runway/ILS/ATIS/radius filters
+- Navigraph sign-in uses OAuth 2.0 Device Authorization Flow with PKCE — a code is displayed in-app and the user approves it in their own browser; the app never asks for a Navigraph password directly
+- The sign-in dialog shows the user code, a button to open the browser, and a cancel option; on success it closes automatically, on denial/expiry/cancellation a clear message is shown
+- The user is not required to sign in every launch: the OAuth refresh token is stored encrypted at rest (Windows DPAPI, current-user scope); the access token itself is never persisted, only kept in memory for the session
+- If a stored refresh token fails to refresh (revoked/expired), the app clears it and only re-prompts sign-in when the user explicitly requests a Navigraph sync — it does not interrupt normal use
+- The most recently downloaded Navigraph airport classification data is cached locally and re-applied automatically on the next launch, without requiring re-authentication
+- Navigraph developer credentials (client ID/secret) are never committed to source control; they are read at runtime from a local file in the AppData folder — if absent, the Navigraph menu action shows a clear "not configured" message instead of failing
+
+**Known gaps — pending Navigraph API access approval** (developer access request submitted 2026-07-22, awaiting approval):
+- The exact `format` query value for DFD v2 packages in `GET /v1/navdata/packages`, and the exact JSON field names for the signed file URL / AIRAC cycle in that response, are unconfirmed. Currently guessed in `NavigraphDataService.DownloadCurrentPackageAsync` as `format=dfdv2`, `packages[0].cycle`, `packages[0].files[0].signed_url` — will need a fix-up once real responses are seen.
+- Whether `tbl_pa_airports.airport_type` ever contains codes other than `C`/`M`/`P` in real data is unconfirmed (the `Unknown` fallback in `NavigraphDataService.ParseAirportTypes` should never trigger under normal use, but this is unverified).
+- End-to-end device-flow sign-in, package download, and `.3sdb` parsing have not been tested against genuine Navigraph data.
+- Multi-day refresh-token rotation behavior has not been verified under real usage.

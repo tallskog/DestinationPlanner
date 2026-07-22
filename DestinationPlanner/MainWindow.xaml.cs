@@ -1,5 +1,7 @@
 using DestinationPlanner.Helpers;
+using DestinationPlanner.Services;
 using DestinationPlanner.ViewModels;
+using DestinationPlanner.Views;
 using Microsoft.Win32;
 using System.IO;
 using System.Windows;
@@ -89,9 +91,39 @@ public partial class MainWindow : Window
         try
         {
             await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
+            await TryApplyCachedNavigraphTypesAsync(vm);
             vm.Map.NotifyAirportDataLoaded();
         }
         catch { /* silently skip if cached files are corrupt – user can reload manually */ }
+    }
+
+    // US34 – silently re-apply the most recently downloaded Navigraph airport-type
+    // data (if any) without requiring re-authentication. No-op if none has ever been synced.
+    private static async Task TryApplyCachedNavigraphTypesAsync(MainViewModel vm)
+    {
+        try
+        {
+            string navigraphDir = Path.Combine(AppDataHelper.AppDataPath, "navigraph");
+            if (!Directory.Exists(navigraphDir)) return;
+
+            string? latest = Directory.GetFiles(navigraphDir, "*.3sdb")
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+            if (latest is null) return;
+
+            var types = await Task.Run(() => vm.NavigraphData.ParseAirportTypes(latest));
+            vm.NavigraphSession.LastAppliedTypesByIcao = types;
+            vm.AirportData.ApplyAirportTypes(types);
+        }
+        catch { /* silently skip if cached Navigraph data is missing/corrupt */ }
+    }
+
+    // US34 – LoadAsync rebuilds the airport dictionary from scratch, which would
+    // otherwise wipe out any Navigraph classification applied earlier this session.
+    private static void ReapplyNavigraphTypes(MainViewModel vm)
+    {
+        if (vm.NavigraphSession.LastAppliedTypesByIcao is { } types)
+            vm.AirportData.ApplyAirportTypes(types);
     }
 
     // OnSourceInitialized fires once the Win32 window handle (HWND) exists —
@@ -159,6 +191,7 @@ public partial class MainWindow : Window
         try
         {
             await vm.AirportData.LoadAsync(destAirports, destRunways, destFrequencies);
+            ReapplyNavigraphTypes(vm);
             vm.Map.NotifyAirportDataLoaded();
 
             var missing = new List<string>();
@@ -209,6 +242,7 @@ public partial class MainWindow : Window
 
             var vm = (MainViewModel)DataContext;
             await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
+            ReapplyNavigraphTypes(vm);
             vm.Map.NotifyAirportDataLoaded();
 
             MessageBox.Show("Airport data downloaded and loaded successfully.", "Download complete",
@@ -223,6 +257,91 @@ public partial class MainWindow : Window
         {
             IsEnabled = true;
         }
+    }
+
+    // US34 – downloads Navigraph DFD v2 data and applies airport_type (ARINC 424 5.177)
+    // classification to the loaded airports. Signs in via device-flow if needed.
+    private async void UpdateNavigraphAirportTypes_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        if (!vm.NavigraphAuth.IsConfigured)
+        {
+            MessageBox.Show("Navigraph integration is not configured on this build.", "Navigraph",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        IsEnabled = false;
+        try
+        {
+            string? accessToken = await EnsureNavigraphAccessTokenAsync(vm);
+            if (accessToken is null) return; // user cancelled/denied sign-in
+
+            string sqlitePath = await vm.NavigraphData.DownloadCurrentPackageAsync(accessToken, CancellationToken.None);
+            var types = await Task.Run(() => vm.NavigraphData.ParseAirportTypes(sqlitePath));
+
+            vm.NavigraphSession.LastAppliedTypesByIcao = types;
+            vm.AirportData.ApplyAirportTypes(types);
+            vm.Map.NotifyAirportDataLoaded();
+
+            MessageBox.Show($"Applied airport type data for {types.Count:N0} airports.", "Navigraph",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Navigraph sync failed:\n{ex.Message}", "Navigraph",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+        }
+    }
+
+    // Reuses a still-valid in-memory access token, else refreshes the stored refresh
+    // token, else falls back to the device-flow sign-in dialog. Returns null if the
+    // user cancelled or was denied during sign-in (refresh failures always fall through
+    // to sign-in rather than surfacing an error, per US34).
+    private async Task<string?> EnsureNavigraphAccessTokenAsync(MainViewModel vm)
+    {
+        if (vm.NavigraphSession.HasValidAccessToken)
+            return vm.NavigraphSession.AccessToken;
+
+        string? refreshToken = NavigraphTokenStore.TryLoad(vm.Settings);
+        if (refreshToken != null)
+        {
+            try
+            {
+                var refreshed = await vm.NavigraphAuth.RefreshAsync(refreshToken, CancellationToken.None);
+                NavigraphTokenStore.Save(vm.Settings, refreshed.RefreshToken);
+                vm.NavigraphSession.AccessToken = refreshed.AccessToken;
+                vm.NavigraphSession.AccessTokenExpiresAtUtc = refreshed.AccessTokenExpiresAtUtc;
+                return refreshed.AccessToken;
+            }
+            catch
+            {
+                NavigraphTokenStore.Clear(vm.Settings); // dead token — fall through to sign-in
+            }
+        }
+
+        var signInVm = new NavigraphSignInViewModel(vm.NavigraphAuth);
+        var dialog = new NavigraphSignInDialog(signInVm) { Owner = this };
+        bool? result = dialog.ShowDialog();
+        if (result != true || signInVm.Result is null) return null;
+
+        NavigraphTokenStore.Save(vm.Settings, signInVm.Result.RefreshToken);
+        vm.NavigraphSession.AccessToken = signInVm.Result.AccessToken;
+        vm.NavigraphSession.AccessTokenExpiresAtUtc = signInVm.Result.AccessTokenExpiresAtUtc;
+        return signInVm.Result.AccessToken;
+    }
+
+    private void NavigraphSignOut_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        NavigraphTokenStore.Clear(vm.Settings);
+        vm.NavigraphSession.AccessToken = null;
+        vm.NavigraphSession.AccessTokenExpiresAtUtc = null;
+        MessageBox.Show("Signed out of Navigraph.", "Navigraph", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();

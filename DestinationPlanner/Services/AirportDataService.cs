@@ -47,6 +47,13 @@ public class AirportDataService : IAirportDataService
         return result;
     }
 
+    public void ApplyAirportTypes(IReadOnlyDictionary<string, AirportType> typesByIcao)
+    {
+        foreach (var (icao, type) in typesByIcao)
+            if (_byIcao.TryGetValue(icao, out var airport))
+                airport.Type = type;
+    }
+
     // ---- Parsing ----
 
     private static Dictionary<string, Airport> ParseAirports(string path)
