@@ -1,0 +1,26 @@
+<Window x:Class="DestinationPlanner.Views.OpenAipApiKeyDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="OpenAIP API Key"
+        Width="380" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+
+    <StackPanel Margin="16">
+        <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
+            Enter your OpenAIP API key to enable airport type classification. Create a free
+            account and generate a key at
+            <Hyperlink NavigateUri="https://accounts.openaip.net" RequestNavigate="Hyperlink_RequestNavigate">accounts.openaip.net</Hyperlink>.
+        </TextBlock>
+
+        <TextBox x:Name="ApiKeyBox" Margin="0,0,0,4"/>
+
+        <TextBlock Text="Saved to openaip.local.json in the app's AppData folder — never committed to source control."
+                   FontSize="10" Foreground="Gray" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Width="80" IsCancel="True" Margin="0,0,8,0"/>
+            <Button Content="Save"   Width="80" IsDefault="True" Click="Save_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

@@ -1,4 +1,5 @@
 using DestinationPlanner.Helpers;
+using DestinationPlanner.Models;
 using DestinationPlanner.Services;
 using System.Windows;
 
@@ -14,10 +15,13 @@ public class MainViewModel : ViewModelBase
 
     public ISimConnectService SimConnect { get; }
 
-    // Navigraph airport-type integration (US34). Fully optional — see NavigraphCredentials.
-    public INavigraphAuthService NavigraphAuth { get; }
-    public INavigraphDataService NavigraphData { get; }
-    public NavigraphSessionState NavigraphSession { get; } = new();
+    // OpenAIP airport-type integration (US34). Fully optional — see OpenAipCredentials.
+    public IOpenAipDataService OpenAipData { get; }
+
+    // Re-applied after every AirportDataService.LoadAsync call, since LoadAsync rebuilds
+    // the airport dictionary from scratch and would otherwise wipe classifications.
+    public IReadOnlyDictionary<string, AirportType>? LastAppliedOpenAipTypesByIcao { get; set; }
+
     public AppSettings Settings { get; }
 
     private string _simStatus = "MSFS: Not connected";
@@ -40,8 +44,7 @@ public class MainViewModel : ViewModelBase
 
         AirportData = new AirportDataService();
         Settings = settings;
-        NavigraphAuth = new NavigraphAuthService(NavigraphCredentials.TryLoad());
-        NavigraphData = new NavigraphDataService();
+        OpenAipData = new OpenAipDataService();
 
         var sim = new SimConnectService(AirportData, settings.SimDataRateHz);
         sim.FlightCompleted   += (_, record) => logbook.AddFlight(record);

@@ -13,8 +13,6 @@
   <ItemGroup>
     <PackageReference Include="Mapsui.Wpf" Version="5.0.2" />
     <PackageReference Include="Velopack" Version="0.0.1298" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>

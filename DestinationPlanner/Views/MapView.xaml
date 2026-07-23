@@ -58,8 +58,15 @@
                 <StackPanel>
                     <CheckBox IsChecked="{Binding ShowCivilAirports}"        Content="Civil"        Margin="0,0,0,3"/>
                     <CheckBox IsChecked="{Binding ShowMilitaryAirports}"     Content="Military"     Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding ShowHeliportAirports}"     Content="Heliport"     Margin="0,0,0,3"/>
                     <CheckBox IsChecked="{Binding ShowPrivateAirports}"      Content="Private"      Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowUnclassifiedAirports}" Content="Unclassified"/>
+                    <CheckBox IsChecked="{Binding ShowOtherAirports}"        Content="Other / Special-Use" Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding ShowUnknownAirports}"      Content="Unknown"      Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding ShowUnclassifiedAirports}" Content="Unclassified" Margin="0,0,0,5"/>
+                    <TextBlock FontSize="9" Foreground="Gray" TextWrapping="Wrap">
+                        Airport type data: <Hyperlink NavigateUri="https://www.openaip.net"
+                                                       RequestNavigate="OpenAipAttribution_RequestNavigate">openAIP</Hyperlink>
+                    </TextBlock>
                 </StackPanel>
             </GroupBox>
 

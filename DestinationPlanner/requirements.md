@@ -240,26 +240,30 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 
 ---
 
-## US34: Airport civil/military/private classification via Navigraph
-**As a pilot**, I want to see whether an airport is civil, military, or privately operated, and filter the map by that classification, so I can plan flights around appropriate airport types.
+## US34: Airport type classification via OpenAIP
+**As a pilot**, I want to see whether an airport is civil, military, a heliport, or privately operated, and filter the map by that classification, so I can plan flights around appropriate airport types.
+
+**Background:** originally specified against Navigraph's Navigation Data API, but Navigraph denied the developer access request (submitted 2026-07-22). An alternative of reading LittleNavMap's local `little_navmap_navigraph.sqlite` cache was investigated and rejected: Navigraph's own `cycle_info.txt` license text explicitly forbids 3rd-party apps from reading that file, and independent of licensing, the compiled schema has no reliable civil/military/private signal (`is_military` misses known military fields; there is no "private" field at all). OpenAIP (openaip.net) was chosen instead — confirmed against their live OpenAPI spec (`api.core.openaip.net`), it offers an equivalent-or-richer `type`/`private` classification via simple API-key auth.
 
 **Acceptance criteria:**
-- Classification data is sourced from Navigraph's Navigation Data API (DFD v2 format), matched to existing airports by ICAO code (ARINC 424 field 5.177, "Public/Military Indicator")
-- Airports with no Navigraph classification data available show as "Unclassified" and remain visible by default — the app behaves exactly as before for users who never sign in to Navigraph
-- A new "Airport Type" filter group in the map sidebar offers Civil / Military / Private / Unclassified checkboxes, all checked by default
+- Classification data is sourced from OpenAIP's `GET /airports` endpoint (`api.core.openaip.net`), matched to existing airports by ICAO code (`icaoCode` field)
+- Mapping from OpenAIP data to `AirportType`, in priority order:
+  1. `private == true` → `Private` (wins regardless of `type`)
+  2. `type` 4 or 7 (Heliport Military / Heliport Civil) → `Heliport`
+  3. `type` 5 (Military Aerodrome) → `Military`
+  4. `type` 0, 2, 3, or 9 (Airport civil/mil, Airfield Civil, International Airport, Airfield IFR) → `Civil`
+  5. `type` 1, 6, 8, 10, 11, 12, or 13 (Glider Site, Ultra Light, Aerodrome Closed, Airfield Water, Landing Strip, Agricultural Landing Strip, Altiport) → `Other`
+  6. `type` null/missing (OpenAIP has the airport but no type on record) → `Unknown`
+- Airports with no OpenAIP record at all show as "Unclassified" and remain visible by default — the app behaves exactly as before for users who never configure an OpenAIP API key
+- The "Airport Type" filter group in the map sidebar offers seven checkboxes — Civil / Military / Heliport / Private / Other (Special-Use) / Unknown / Unclassified — all checked by default
 - The Airport Type filter applies uniformly to all map layers (all airports, logbook, departed, landed) via the same shared filter logic used by the runway/ILS/ATIS/radius filters
-- Navigraph sign-in uses OAuth 2.0 Device Authorization Flow with PKCE — a code is displayed in-app and the user approves it in their own browser; the app never asks for a Navigraph password directly
-- The sign-in dialog shows the user code, a button to open the browser, and a cancel option; on success it closes automatically, on denial/expiry/cancellation a clear message is shown
-- The user is not required to sign in every launch: the OAuth refresh token is stored encrypted at rest (Windows DPAPI, current-user scope); the access token itself is never persisted, only kept in memory for the session
-- If a stored refresh token fails to refresh (revoked/expired), the app clears it and only re-prompts sign-in when the user explicitly requests a Navigraph sync — it does not interrupt normal use
-- The most recently downloaded Navigraph airport classification data is cached locally and re-applied automatically on the next launch, without requiring re-authentication
-- Navigraph developer credentials (client ID/secret) are never committed to source control; they are read at runtime from a local file in the AppData folder — if absent, the Navigraph menu action shows a clear "not configured" message instead of failing
+- Authentication is a single OpenAIP API key, sent as the `x-openaip-api-key` request header — no OAuth flow, no sign-in dialog, no stored session
+- The API key is never committed to source control; it is read at runtime from a local, un-committed file (`openaip.local.json`) in the AppData folder — if absent, the "Update Airport Type Data (OpenAIP)…" menu action prompts the user for the key in-app (with a link to `accounts.openaip.net` to get one) and saves it to that file so future syncs don't require re-entering it; cancelling the prompt aborts the sync without error
+- The most recently fetched OpenAIP airport classification data is cached locally (`openaip-airport-types.json` in AppData) and re-applied automatically on the next launch, without requiring a network call
+- OpenAIP's data is licensed CC BY-NC 4.0 (Attribution-NonCommercial): the app displays an in-app attribution link to https://www.openaip.net near the Airport Type filter, and the feature is only used for DestinationPlanner's non-commercial, free distribution
 
-**Known gaps — pending Navigraph API access approval** (developer access request submitted 2026-07-22, awaiting approval):
-- The exact `format` query value for DFD v2 packages in `GET /v1/navdata/packages`, and the exact JSON field names for the signed file URL / AIRAC cycle in that response, are unconfirmed. Currently guessed in `NavigraphDataService.DownloadCurrentPackageAsync` as `format=dfdv2`, `packages[0].cycle`, `packages[0].files[0].signed_url` — will need a fix-up once real responses are seen.
-- Whether `tbl_pa_airports.airport_type` ever contains codes other than `C`/`M`/`P` in real data is unconfirmed (the `Unknown` fallback in `NavigraphDataService.ParseAirportTypes` should never trigger under normal use, but this is unverified).
-- End-to-end device-flow sign-in, package download, and `.3sdb` parsing have not been tested against genuine Navigraph data.
-- Multi-day refresh-token rotation behavior has not been verified under real usage.
+**Known gaps:**
+- Real-world OpenAIP rate limits under a free-tier API key have not been measured against a full worldwide `/airports` pagination pull; if this becomes slow or throttled, the fetch may need to be scoped (e.g. per-country) rather than global.
 
 ---
 
@@ -268,7 +272,7 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 
 **Acceptance criteria:**
 - An xUnit test project (`DestinationPlanner.Tests`) exists alongside the main project, referenced from `DestinationPlanner.slnx`, and runs via `dotnet test`
-- Tests exercise pure logic and ViewModels via fakes for `IAirportDataService`, `ILogbookService`, `ISimConnectService`, and `INavigraphAuthService` — no real file I/O, network calls, or SimConnect/MSFS dependency
+- Tests exercise pure logic and ViewModels via fakes for `IAirportDataService`, `ILogbookService`, and `ISimConnectService` — no real file I/O, network calls, or SimConnect/MSFS dependency
 - `dotnet test` is run automatically whenever code changes are made (see CLAUDE.md Testing section) and must pass before a task is considered done
 - If a test fails, or a new requirement would conflict with an existing one here, the user is consulted before proceeding — never silently resolved
 
@@ -276,12 +280,10 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 - `AirportDataService.ApplyAirportTypes` — merge-by-ICAO, unmatched ICAOs stay Unclassified, case-insensitive lookup
 - `Airport.Type` defaults to `Unclassified`
 - `AirportDataService` CSV parsing (`ParseAirports`, `ApplyRunwayData`, `ApplyFrequencyData`) — instrument-approach heuristic per airport type/scheduled-service, malformed/short rows skipped, closed runways excluded, runway sort/longest-runway, ATIS frequency detection, and a regression guard for BUG-01's runway endpoint column mapping — US13, BUG-01
-- `NavigraphDataService.ParseAirportTypes` — ARINC code → `AirportType` mapping (C/M/P/unrecognized/null), case-insensitive ICAO keys
-- `NavigraphCredentials.ParseJson` — valid/missing/malformed/whitespace-only JSON handling
-- `NavigraphTokenStore.Protect`/`Unprotect` — DPAPI round-trip, invalid input returns null instead of throwing
-- `NavigraphAuthService` — device-flow field/endpoint correctness, a genuine PKCE round-trip check (SHA256(verifier) recomputed and compared against the code_challenge actually sent), authorization_pending retry, access_denied/expired_token/unrecognized error mapping, local device-code-expiry without contacting the server, cancellation, and refresh-token grant — made testable via a small refactor: `HttpClient` is now injected (defaults to a real client in production) instead of a hardcoded static instance, using a fake `HttpMessageHandler` in tests
-- `MapViewModel` airport-type filter — default-all-visible, per-type exclusion, `ClearFiltersCommand` reset, and parity between `GetAllFilteredAirports()` and the shared `ApplySharedFilters()` path used by logbook/departed/landed layers (guards against a BUG-05-style regression)
-- `NavigraphSignInViewModel` state machine — Success/Denied/Expired/Error/Cancelled transitions, `Completed` event firing once
+- `OpenAipDataService.MapType` — the full OpenAIP `type`/`private` → `AirportType` mapping table (private-override, Heliport, Military, Civil, Other, and null-type → Unknown), case-insensitive ICAO keys
+- `OpenAipDataService.FetchAirportTypesAsync` — API-key header sent correctly, pagination stops at `totalPages`, items with no `icaoCode` skipped — made testable via `HttpClient` injection (defaults to a real client in production) with a fake `HttpMessageHandler` in tests
+- `OpenAipCredentials.ParseJson` — valid/missing/malformed/whitespace-only JSON handling
+- `MapViewModel` airport-type filter — default-all-visible across all seven categories, per-type exclusion (including Heliport/Other/Unknown), `ClearFiltersCommand` reset, and parity between `GetAllFilteredAirports()` and the shared `ApplySharedFilters()` path used by logbook/departed/landed layers (guards against a BUG-05-style regression)
 - `GeoHelper` — `DistanceNm` (zero/symmetry/1-degree sanity range), `FeetToMeters`/`MetersToFeet` rounding, Mercator round-trip and the standard EPSG:3857 bound — US3, US5.1
 - `LandingRatingHelper` — `ComputeBreakdown`/`ComputeStars` for each of the six scoring components at their flat (perfect/zero) regions plus one linear-interpolation region, missing-component display, and `Enrich`'s crosswind/runway-geometry/star assignment — US29
 - `NativeLogbookSerializer` — full round-trip, omit-if-null on unset landing fields, loading a pre-v1.2 file with none of the extended landing elements, silently ignoring a legacy `AircraftType` element, and skipping one malformed `<Flight>` record without losing the rest of the file — US8, US-BC2, US-BC3
@@ -290,4 +292,3 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 
 **Coverage — not yet implemented (backlog):**
 - UI rendering (XAML bindings, Mapsui layers, popups) and live SimConnect/MSFS behavior — verified manually, not by automated tests (see CLAUDE.md Testing section)
-- `NavigraphDataService.DownloadCurrentPackageAsync` (package discovery + download) — same `HttpClient`-injection pattern as `NavigraphAuthService` would apply if this becomes worth testing before real Navigraph API access is confirmed

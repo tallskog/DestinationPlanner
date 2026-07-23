@@ -22,7 +22,10 @@ public class MapViewModel : ViewModelBase
     private bool _showNotVisited = true;
     private bool _showCivilAirports = true;
     private bool _showMilitaryAirports = true;
+    private bool _showHeliportAirports = true;
     private bool _showPrivateAirports = true;
+    private bool _showOtherAirports = true;
+    private bool _showUnknownAirports = true;
     private bool _showUnclassifiedAirports = true;
     private string _icaoPrefixes = string.Empty;
     private string _airportDataStatus = "Airport data not loaded";
@@ -60,7 +63,10 @@ public class MapViewModel : ViewModelBase
     public bool ShowNotVisited { get => _showNotVisited; set => SetField(ref _showNotVisited, value); }
     public bool ShowCivilAirports { get => _showCivilAirports; set => SetField(ref _showCivilAirports, value); }
     public bool ShowMilitaryAirports { get => _showMilitaryAirports; set => SetField(ref _showMilitaryAirports, value); }
+    public bool ShowHeliportAirports { get => _showHeliportAirports; set => SetField(ref _showHeliportAirports, value); }
     public bool ShowPrivateAirports { get => _showPrivateAirports; set => SetField(ref _showPrivateAirports, value); }
+    public bool ShowOtherAirports { get => _showOtherAirports; set => SetField(ref _showOtherAirports, value); }
+    public bool ShowUnknownAirports { get => _showUnknownAirports; set => SetField(ref _showUnknownAirports, value); }
     public bool ShowUnclassifiedAirports { get => _showUnclassifiedAirports; set => SetField(ref _showUnclassifiedAirports, value); }
     public string IcaoPrefixes { get => _icaoPrefixes; set => SetField(ref _icaoPrefixes, value); }
 
@@ -277,20 +283,25 @@ public class MapViewModel : ViewModelBase
         return candidates;
     }
 
-    // Airport-type (civil/military/private/unclassified) filter shared by GetAllFilteredAirports
-    // and ApplySharedFilters. All-checked (the default) is a no-op, so the app behaves exactly
-    // as before for anyone who has never synced Navigraph data (every airport is Unclassified).
+    // Airport-type (civil/military/heliport/private/other/unknown/unclassified) filter shared by
+    // GetAllFilteredAirports and ApplySharedFilters. All-checked (the default) is a no-op, so the
+    // app behaves exactly as before for anyone who has never synced OpenAIP data (every airport
+    // is Unclassified).
     private IEnumerable<Airport> ApplyAirportTypeFilter(IEnumerable<Airport> candidates)
     {
-        if (_showCivilAirports && _showMilitaryAirports && _showPrivateAirports && _showUnclassifiedAirports)
+        if (_showCivilAirports && _showMilitaryAirports && _showHeliportAirports && _showPrivateAirports
+            && _showOtherAirports && _showUnknownAirports && _showUnclassifiedAirports)
             return candidates;
 
         return candidates.Where(a => a.Type switch
         {
             AirportType.Civil => _showCivilAirports,
             AirportType.Military => _showMilitaryAirports,
+            AirportType.Heliport => _showHeliportAirports,
             AirportType.Private => _showPrivateAirports,
-            _ => _showUnclassifiedAirports, // Unclassified and Unknown bucketed together
+            AirportType.Other => _showOtherAirports,
+            AirportType.Unknown => _showUnknownAirports,
+            _ => _showUnclassifiedAirports, // Unclassified
         });
     }
 
@@ -314,7 +325,10 @@ public class MapViewModel : ViewModelBase
         ShowNotVisited = true;
         ShowCivilAirports = true;
         ShowMilitaryAirports = true;
+        ShowHeliportAirports = true;
         ShowPrivateAirports = true;
+        ShowOtherAirports = true;
+        ShowUnknownAirports = true;
         ShowUnclassifiedAirports = true;
         IcaoPrefixes = string.Empty;
         FiltersApplied?.Invoke(this, EventArgs.Empty);

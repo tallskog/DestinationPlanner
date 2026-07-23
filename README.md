@@ -12,7 +12,7 @@ A Windows desktop application for Microsoft Flight Simulator 2024 that combines 
 - **Interactive map** — OpenStreetMap tiles with zoom and pan; airport markers filtered by runway length, ILS capability, or radius from a centre airport
 - **Logbook airports on map** — visited airports are shown as orange dots; a green ring indicates you departed from there, a red ring that you landed there; both rings appear when you have done both, with a small gap between them; a map legend in the sidebar explains all symbols
 - **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**; the last-used logbook is remembered across sessions so you are not prompted on every start
-- **Airport type filter (optional, Navigraph)** — classify airports as civil, military, or private (ARINC 424 field 5.177) and filter the map by type; requires a free Navigraph developer registration and a Navigraph subscription — see [Navigraph integration](#navigraph-integration-optional)
+- **Airport type filter (optional, OpenAIP)** — classify airports as civil, military, heliport, private, other/special-use, or unknown, and filter the map by type; requires a free OpenAIP API key — see [OpenAIP integration](#openaip-integration-optional)
 
 ## Prerequisites
 
@@ -56,7 +56,7 @@ The output in `publish/` can be run on any Windows 10/11 machine without the .NE
 dotnet test DestinationPlanner.slnx
 ```
 
-Tests live in `DestinationPlanner.Tests` (xUnit) and cover pure logic and ViewModel behavior — filter logic, CSV/SQLite parsing, DPAPI token round-trips, and the Navigraph sign-in state machine — using fakes for `IAirportDataService`/`ILogbookService`/`ISimConnectService`/`INavigraphAuthService` rather than real I/O or SimConnect. UI rendering and live SimConnect/MSFS behavior aren't covered by automated tests and should be verified manually.
+Tests live in `DestinationPlanner.Tests` (xUnit) and cover pure logic and ViewModel behavior — filter logic, CSV parsing, and the OpenAIP type-mapping/pagination logic — using fakes for `IAirportDataService`/`ILogbookService`/`ISimConnectService` rather than real I/O or SimConnect. UI rendering and live SimConnect/MSFS behavior aren't covered by automated tests and should be verified manually.
 
 ## Airport data setup
 
@@ -113,29 +113,23 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
 | Show visited / not-visited | Toggle airports you have or have not flown to/from |
 | Centre ICAO + Radius | Show only airports within N nm of the given airport |
 | ICAO prefixes | Comma-separated prefixes to restrict by country or region (e.g. `EF,ES`) |
-| Airport Type | Civil / Military / Private / Unclassified — all checked by default. Unclassified covers every airport until you sync Navigraph data (see below) |
+| Airport Type | Civil / Military / Heliport / Private / Other (Special-Use) / Unknown / Unclassified — all checked by default. Unclassified covers every airport until you sync OpenAIP data (see below) |
 
 Click **Apply Filters** to update the map. **Clear** resets all filters to their defaults.
 
 ### Airport search
 A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.
 
-## Navigraph integration (optional)
+## OpenAIP integration (optional)
 
-Airport civil/military/private classification (ARINC 424 field 5.177) is sourced from Navigraph's Navigation Data API (DFD v2 format). This is entirely optional — without it, every airport shows as "Unclassified" and the app behaves exactly as it does today.
+Airport type classification (civil / military / heliport / private / other-special-use / unknown) is sourced from [OpenAIP](https://www.openaip.net)'s public `/airports` API. This is entirely optional — without it, every airport shows as "Unclassified" and the app behaves exactly as it does today.
+
+OpenAIP's data is licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (Attribution-NonCommercial) — free for non-commercial use like this project; the app credits OpenAIP with a link in the Airport Type sidebar panel.
 
 To enable it:
 
-1. Register a developer application with Navigraph: email `dev@navigraph.com` requesting **Navigation Data API** access with the **DFD v2** format and the **Device Authorization Flow**. You'll receive a `client_id` and `client_secret` once approved. A Navigraph Navigation Data or Ultimate subscription is required to actually pull current-cycle data.
-2. Create `navigraph.local.json` in the app's AppData folder (`%LocalAppData%\DestinationPlanner\`, or `%LocalAppData%\DestinationPlanner-dev\` for Debug builds):
-   ```json
-   {
-     "clientId": "your-client-id",
-     "clientSecret": "your-client-secret"
-   }
-   ```
-   This file is never committed to source control and lives entirely outside the repository.
-3. In the app: **File → Update Airport Type Data (Navigraph)…** — the first time, you'll be shown a code to enter at navigraph.com to sign in (no password is ever typed into the app). The signed-in session persists across restarts; use **File → Sign out of Navigraph** to clear it.
+1. Create a free account at [accounts.openaip.net](https://accounts.openaip.net) and generate an API key on the **API Clients** page.
+2. In the app: **File → Update Airport Type Data (OpenAIP)…** — the first time, you'll be prompted to paste your API key; the app saves it to `openaip.local.json` in the AppData folder (`%LocalAppData%\DestinationPlanner\`, or `%LocalAppData%\DestinationPlanner-dev\` for Debug builds) and immediately fetches and applies the classification. This file is never committed to source control. Subsequent syncs reuse the saved key without prompting again. The result is also cached locally and reapplied automatically on the next launch.
 
 ## Configuration
 
@@ -159,18 +153,17 @@ A `settings.json` file is created automatically in the AppData directory (`%Loca
 DestinationPlanner/
 ├── Converters/      WPF value converters (SetContainsConverter)
 ├── Models/          FlightRecord, Airport, AirportType
-├── ViewModels/      MainViewModel, MapViewModel, LogbookViewModel, NavigraphSignInViewModel
-├── Views/           MapView.xaml, LogbookView.xaml, LogbookSelectionDialog.xaml, NavigraphSignInDialog.xaml
-├── Services/        LogbookService, AirportDataService, SimConnectService, NavigraphAuthService, NavigraphDataService
+├── ViewModels/      MainViewModel, MapViewModel, LogbookViewModel
+├── Views/           MapView.xaml, LogbookView.xaml, LogbookSelectionDialog.xaml
+├── Services/        LogbookService, AirportDataService, SimConnectService, OpenAipDataService, OpenAipCredentials
 ├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter, LittleNavmapCsvImporter
 ├── Schemas/         NativeLogbook.xsd, ForeignLogbook.xsd
-└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper, AppSettings, AppSettingsService, NavigraphTokenStore
+└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper, AppSettings, AppSettingsService
 
 DestinationPlanner.Tests/
-├── Services/        AirportDataService, NavigraphDataService, NavigraphCredentials tests
-├── Helpers/         NavigraphTokenStore tests
-├── ViewModels/      MapViewModel filter tests, NavigraphSignInViewModel tests
-└── Fakes/           Hand-rolled fakes for IAirportDataService, ILogbookService, ISimConnectService, INavigraphAuthService
+├── Services/        AirportDataService, OpenAipDataService, OpenAipCredentials tests
+├── ViewModels/      MapViewModel filter tests
+└── Fakes/           Hand-rolled fakes for IAirportDataService, ILogbookService, ISimConnectService
 ```
 
 ## Native logbook XML format

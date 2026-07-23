@@ -1,12 +1,14 @@
 namespace DestinationPlanner.Models;
 
-// ARINC 424 field 5.177, "Public/Military Indicator", as surfaced by Navigraph's
-// DFD v2 tbl_pa_airports.airport_type column ('C'/'M'/'P').
+// Sourced from OpenAIP's /airports 'type' (0-13) and 'private' fields — see
+// OpenAipDataService.MapType for the full mapping.
 public enum AirportType
 {
-    Unclassified, // no Navigraph data has ever been applied to this airport
-    Civil,        // code 'C'
-    Military,     // code 'M'
-    Private,      // code 'P'
-    Unknown,      // Navigraph data present but the code wasn't recognized
+    Unclassified, // no OpenAIP record has ever been applied to this airport
+    Civil,        // type 0, 2, 3, or 9
+    Military,     // type 5
+    Heliport,     // type 4 or 7 (military or civil)
+    Private,      // OpenAIP 'private' flag, regardless of type
+    Other,        // type 1, 6, 8, 10, 11, 12, or 13 (glider/ultralight/water/landing strip/agricultural/altiport/closed)
+    Unknown,      // OpenAIP record present but 'type' is null/missing
 }

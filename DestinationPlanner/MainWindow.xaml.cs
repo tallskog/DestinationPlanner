@@ -1,9 +1,12 @@
 using DestinationPlanner.Helpers;
+using DestinationPlanner.Models;
 using DestinationPlanner.Services;
 using DestinationPlanner.ViewModels;
 using DestinationPlanner.Views;
 using Microsoft.Win32;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -91,38 +94,41 @@ public partial class MainWindow : Window
         try
         {
             await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
-            await TryApplyCachedNavigraphTypesAsync(vm);
+            await TryApplyCachedOpenAipTypesAsync(vm);
             vm.Map.NotifyAirportDataLoaded();
         }
         catch { /* silently skip if cached files are corrupt – user can reload manually */ }
     }
 
-    // US34 – silently re-apply the most recently downloaded Navigraph airport-type
-    // data (if any) without requiring re-authentication. No-op if none has ever been synced.
-    private static async Task TryApplyCachedNavigraphTypesAsync(MainViewModel vm)
+    private static readonly JsonSerializerOptions _openAipCacheJsonOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() },
+    };
+
+    // US34 – silently re-apply the most recently fetched OpenAIP airport-type data (if
+    // any), without requiring a network call. No-op if none has ever been synced.
+    private static async Task TryApplyCachedOpenAipTypesAsync(MainViewModel vm)
     {
         try
         {
-            string navigraphDir = Path.Combine(AppDataHelper.AppDataPath, "navigraph");
-            if (!Directory.Exists(navigraphDir)) return;
+            string cachePath = Path.Combine(AppDataHelper.AppDataPath, "openaip-airport-types.json");
+            if (!File.Exists(cachePath)) return;
 
-            string? latest = Directory.GetFiles(navigraphDir, "*.3sdb")
-                .OrderByDescending(File.GetLastWriteTimeUtc)
-                .FirstOrDefault();
-            if (latest is null) return;
+            string json = await File.ReadAllTextAsync(cachePath);
+            var types = JsonSerializer.Deserialize<Dictionary<string, AirportType>>(json, _openAipCacheJsonOptions);
+            if (types is null) return;
 
-            var types = await Task.Run(() => vm.NavigraphData.ParseAirportTypes(latest));
-            vm.NavigraphSession.LastAppliedTypesByIcao = types;
+            vm.LastAppliedOpenAipTypesByIcao = types;
             vm.AirportData.ApplyAirportTypes(types);
         }
-        catch { /* silently skip if cached Navigraph data is missing/corrupt */ }
+        catch { /* silently skip if cached OpenAIP data is missing/corrupt */ }
     }
 
     // US34 – LoadAsync rebuilds the airport dictionary from scratch, which would
-    // otherwise wipe out any Navigraph classification applied earlier this session.
-    private static void ReapplyNavigraphTypes(MainViewModel vm)
+    // otherwise wipe out any OpenAIP classification applied earlier this session.
+    private static void ReapplyOpenAipTypes(MainViewModel vm)
     {
-        if (vm.NavigraphSession.LastAppliedTypesByIcao is { } types)
+        if (vm.LastAppliedOpenAipTypesByIcao is { } types)
             vm.AirportData.ApplyAirportTypes(types);
     }
 
@@ -191,7 +197,7 @@ public partial class MainWindow : Window
         try
         {
             await vm.AirportData.LoadAsync(destAirports, destRunways, destFrequencies);
-            ReapplyNavigraphTypes(vm);
+            ReapplyOpenAipTypes(vm);
             vm.Map.NotifyAirportDataLoaded();
 
             var missing = new List<string>();
@@ -242,7 +248,7 @@ public partial class MainWindow : Window
 
             var vm = (MainViewModel)DataContext;
             await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
-            ReapplyNavigraphTypes(vm);
+            ReapplyOpenAipTypes(vm);
             vm.Map.NotifyAirportDataLoaded();
 
             MessageBox.Show("Airport data downloaded and loaded successfully.", "Download complete",
@@ -259,89 +265,45 @@ public partial class MainWindow : Window
         }
     }
 
-    // US34 – downloads Navigraph DFD v2 data and applies airport_type (ARINC 424 5.177)
-    // classification to the loaded airports. Signs in via device-flow if needed.
-    private async void UpdateNavigraphAirportTypes_Click(object sender, RoutedEventArgs e)
+    // US34 – fetches OpenAIP airport type/private classification and applies it to the
+    // loaded airports, then caches the result locally for the next launch.
+    private async void UpdateOpenAipAirportTypes_Click(object sender, RoutedEventArgs e)
     {
         var vm = (MainViewModel)DataContext;
-        if (!vm.NavigraphAuth.IsConfigured)
+        var credentials = OpenAipCredentials.TryLoad();
+        if (credentials is null)
         {
-            MessageBox.Show("Navigraph integration is not configured on this build.", "Navigraph",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
+            var keyDialog = new OpenAipApiKeyDialog { Owner = this };
+            if (keyDialog.ShowDialog() != true || keyDialog.ApiKey is null) return; // user cancelled
+
+            credentials = new OpenAipCredentials(keyDialog.ApiKey);
+            credentials.Save();
         }
 
         IsEnabled = false;
         try
         {
-            string? accessToken = await EnsureNavigraphAccessTokenAsync(vm);
-            if (accessToken is null) return; // user cancelled/denied sign-in
+            var types = await vm.OpenAipData.FetchAirportTypesAsync(credentials.ApiKey, CancellationToken.None);
 
-            string sqlitePath = await vm.NavigraphData.DownloadCurrentPackageAsync(accessToken, CancellationToken.None);
-            var types = await Task.Run(() => vm.NavigraphData.ParseAirportTypes(sqlitePath));
-
-            vm.NavigraphSession.LastAppliedTypesByIcao = types;
+            vm.LastAppliedOpenAipTypesByIcao = types;
             vm.AirportData.ApplyAirportTypes(types);
             vm.Map.NotifyAirportDataLoaded();
 
-            MessageBox.Show($"Applied airport type data for {types.Count:N0} airports.", "Navigraph",
+            string cachePath = Path.Combine(AppDataHelper.AppDataPath, "openaip-airport-types.json");
+            await File.WriteAllTextAsync(cachePath, JsonSerializer.Serialize(types, _openAipCacheJsonOptions));
+
+            MessageBox.Show($"Applied airport type data for {types.Count:N0} airports.", "OpenAIP",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Navigraph sync failed:\n{ex.Message}", "Navigraph",
+            MessageBox.Show($"OpenAIP sync failed:\n{ex.Message}", "OpenAIP",
                 MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             IsEnabled = true;
         }
-    }
-
-    // Reuses a still-valid in-memory access token, else refreshes the stored refresh
-    // token, else falls back to the device-flow sign-in dialog. Returns null if the
-    // user cancelled or was denied during sign-in (refresh failures always fall through
-    // to sign-in rather than surfacing an error, per US34).
-    private async Task<string?> EnsureNavigraphAccessTokenAsync(MainViewModel vm)
-    {
-        if (vm.NavigraphSession.HasValidAccessToken)
-            return vm.NavigraphSession.AccessToken;
-
-        string? refreshToken = NavigraphTokenStore.TryLoad(vm.Settings);
-        if (refreshToken != null)
-        {
-            try
-            {
-                var refreshed = await vm.NavigraphAuth.RefreshAsync(refreshToken, CancellationToken.None);
-                NavigraphTokenStore.Save(vm.Settings, refreshed.RefreshToken);
-                vm.NavigraphSession.AccessToken = refreshed.AccessToken;
-                vm.NavigraphSession.AccessTokenExpiresAtUtc = refreshed.AccessTokenExpiresAtUtc;
-                return refreshed.AccessToken;
-            }
-            catch
-            {
-                NavigraphTokenStore.Clear(vm.Settings); // dead token — fall through to sign-in
-            }
-        }
-
-        var signInVm = new NavigraphSignInViewModel(vm.NavigraphAuth);
-        var dialog = new NavigraphSignInDialog(signInVm) { Owner = this };
-        bool? result = dialog.ShowDialog();
-        if (result != true || signInVm.Result is null) return null;
-
-        NavigraphTokenStore.Save(vm.Settings, signInVm.Result.RefreshToken);
-        vm.NavigraphSession.AccessToken = signInVm.Result.AccessToken;
-        vm.NavigraphSession.AccessTokenExpiresAtUtc = signInVm.Result.AccessTokenExpiresAtUtc;
-        return signInVm.Result.AccessToken;
-    }
-
-    private void NavigraphSignOut_Click(object sender, RoutedEventArgs e)
-    {
-        var vm = (MainViewModel)DataContext;
-        NavigraphTokenStore.Clear(vm.Settings);
-        vm.NavigraphSession.AccessToken = null;
-        vm.NavigraphSession.AccessTokenExpiresAtUtc = null;
-        MessageBox.Show("Signed out of Navigraph.", "Navigraph", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();

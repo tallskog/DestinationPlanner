@@ -39,8 +39,7 @@
                 <MenuItem Header="Load _Airport Data…"      Click="LoadAirportData_Click"/>
                 <MenuItem Header="_Download Airport Data"   Click="DownloadAirportData_Click"/>
                 <Separator/>
-                <MenuItem Header="Update Airport _Type Data (Navigraph)…" Click="UpdateNavigraphAirportTypes_Click"/>
-                <MenuItem Header="Sign _out of Navigraph"   Click="NavigraphSignOut_Click"/>
+                <MenuItem Header="Update Airport _Type Data (OpenAIP)…" Click="UpdateOpenAipAirportTypes_Click"/>
                 <Separator/>
                 <MenuItem Header="E_xit"                    Click="Exit_Click"/>
             </MenuItem>

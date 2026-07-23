@@ -102,6 +102,13 @@ public partial class MapView : UserControl
         Unloaded += OnUnloaded;
     }
 
+    private void OpenAipAttribution_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
+        catch { /* best-effort — attribution link opening failures are non-fatal */ }
+        e.Handled = true;
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tabPrimaryWasOpen   = PrimaryPopup.IsOpen;

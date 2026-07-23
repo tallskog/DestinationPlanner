@@ -2,7 +2,7 @@ using System.Net.Http;
 
 namespace DestinationPlanner.Tests.Fakes;
 
-// Lets tests script canned HTTP responses for NavigraphAuthService without any real network I/O.
+// Lets tests script canned HTTP responses (e.g. for OpenAipDataService) without any real network I/O.
 public class FakeHttpMessageHandler : HttpMessageHandler
 {
     public Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> Handler { get; set; } =
