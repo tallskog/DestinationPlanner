@@ -308,6 +308,17 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 
 ---
 
+## US37: Scrollable map filter sidebar
+**As a user**, I want to be able to apply map filters without first having to resize the window, so that growing the number of filter groups doesn't force a bigger window just to reach the Apply/Clear buttons.
+
+**Acceptance criteria:**
+- The **Apply Filters** / **Clear** buttons are pinned directly under the airport-data status line, at the top of the sidebar, and are always visible regardless of window height
+- The filter groups (Runway Length, Capabilities, Airport Type, Visit Status, Radius Filter, ICAO Filter) and the Map Legend scroll independently inside a vertical `ScrollViewer` that fills the remaining sidebar height between the pinned buttons and the bottom status text
+- The main window has `MinWidth="820"` / `MinHeight="480"` so it cannot be resized below a usable size; below that, the sidebar scrollbar (not further shrinking) is how additional filters are reached
+- Verified manually: resizing the window down to 820×480 keeps the buttons, map, and status bar visible, with the filter list scrollable via the sidebar's vertical scrollbar
+
+---
+
 ## BUG-06: Tests overwrote the real dev settings.json, wiping the remembered logbook path
 **Root cause:** `AppDataHelper.AppDataPath` resolves to `%LocalAppData%\DestinationPlanner-dev\` under `#if DEBUG` — the same folder a real Debug build of the app uses. `DestinationPlanner.Tests` also builds in Debug, so `AppSettingsService.Save`, called from `MapViewModel.SaveFiltersToSettings()` on Apply/Clear, wrote directly to that shared real file with no test isolation. The `ClearFiltersCommand_ResetsAirportTypeFiltersToAllVisible` test built its `MapViewModel` with a blank `new AppSettings()`, so running `dotnet test` overwrote the developer's real `settings.json`, nulling out `LastLogbookPath` and resetting every filter to default — surfacing as the app re-prompting for a logbook on next launch, and would have looked like a lost preference (not lost logbook data — the XML files themselves were never touched).
 

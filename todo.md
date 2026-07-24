@@ -37,6 +37,7 @@
 - [x] **SimConnect bogus departure fix** — 5-second stabilization window after connection suppresses loading-state jitter (stale coordinates and spurious brake transitions). Non-ICAO identifiers (e.g. `US-12381`) are also excluded from departure/arrival resolution.
 - [x] **Default logbook** — last-used logbook path is remembered across restarts (`AppSettings.LastLogbookPath`, set/read in `App.xaml.cs`); on first launch with multiple logbook files, `LogbookSelectionDialog` prompts the user to pick one.
 - [x] **Persist map filter selections** — filter values (runway length/unit, ILS, ATIS, radius, visited/not-visited, airport type, ICAO prefixes) are saved to `settings.json` on **Apply Filters** or **Clear** and restored on next launch. **Clear** still resets to the original defaults, as before — it now also persists that reset. See US36 in requirements.md.
+- [x] **Scrollable filter sidebar** — Apply Filters/Clear are now pinned at the top of the sidebar (always visible without resizing); the filter groups + Map Legend below scroll independently. Window MinWidth/MinHeight (820x480) prevents shrinking below a usable size. See US37 in requirements.md.
 
 ## Bugs / known issues
 

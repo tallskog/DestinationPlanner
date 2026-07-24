@@ -16,7 +16,22 @@
                        Margin="4,0,4,6"
                        FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap"/>
 
-            <GroupBox DockPanel.Dock="Top" Header="Runway Length" Margin="0,0,0,4" Padding="6,4">
+            <!-- Pinned above the scrollable filter list so Apply/Clear stay reachable
+                 without resizing the window, however many filter groups are added later. -->
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                <Button Content="Apply Filters" Command="{Binding ApplyFiltersCommand}" Padding="10,3"/>
+                <Button Content="Clear"         Command="{Binding ClearFiltersCommand}" Padding="10,3" Margin="6,0,0,0"/>
+            </StackPanel>
+
+            <TextBlock x:Name="MapStatus" DockPanel.Dock="Bottom"
+                       Margin="4,8,4,0" FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap"/>
+
+            <!-- Remaining filter groups + legend scroll independently, filling whatever
+                 vertical space is left between the pinned buttons above and status below. -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel>
+
+            <GroupBox Header="Runway Length" Margin="0,0,0,4" Padding="6,4">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -43,7 +58,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox DockPanel.Dock="Top" Header="Capabilities" Margin="0,0,0,4" Padding="6,4">
+            <GroupBox Header="Capabilities" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
                     <CheckBox IsChecked="{Binding RequireInstrumentApproach}" Margin="0,0,0,3">
                         <TextBlock Text="Instrument approach (ILS)" TextWrapping="Wrap"/>
@@ -54,7 +69,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox DockPanel.Dock="Top" Header="Airport Type" Margin="0,0,0,4" Padding="6,4">
+            <GroupBox Header="Airport Type" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
                     <CheckBox IsChecked="{Binding ShowCivilAirports}"        Content="Civil"        Margin="0,0,0,3"/>
                     <CheckBox IsChecked="{Binding ShowMilitaryAirports}"     Content="Military"     Margin="0,0,0,3"/>
@@ -70,14 +85,14 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox DockPanel.Dock="Top" Header="Visit Status" Margin="0,0,0,4" Padding="6,4">
+            <GroupBox Header="Visit Status" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
                     <CheckBox IsChecked="{Binding ShowVisited}"    Content="Show visited airports"     Margin="0,0,0,3"/>
                     <CheckBox IsChecked="{Binding ShowNotVisited}" Content="Show not-visited airports"/>
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox DockPanel.Dock="Top" Header="Radius Filter" Margin="0,0,0,4" Padding="6,4">
+            <GroupBox Header="Radius Filter" Margin="0,0,0,4" Padding="6,4">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -97,7 +112,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox DockPanel.Dock="Top" Header="ICAO Filter" Margin="0,0,0,4" Padding="6,4">
+            <GroupBox Header="ICAO Filter" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
                     <TextBox Text="{Binding IcaoPrefixes, UpdateSourceTrigger=PropertyChanged}"
                              CharacterCasing="Upper"/>
@@ -106,12 +121,7 @@
                 </StackPanel>
             </GroupBox>
 
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,4,0,0">
-                <Button Content="Apply Filters" Command="{Binding ApplyFiltersCommand}" Padding="10,3"/>
-                <Button Content="Clear"         Command="{Binding ClearFiltersCommand}" Padding="10,3" Margin="6,0,0,0"/>
-            </StackPanel>
-
-            <GroupBox DockPanel.Dock="Top" Header="Map Legend" Margin="0,6,0,4" Padding="6,4">
+            <GroupBox Header="Map Legend" Margin="0,2,0,4" Padding="6,4">
                 <StackPanel>
 
                     <!-- Unvisited airport: plain blue dot -->
@@ -174,8 +184,8 @@
                 </StackPanel>
             </GroupBox>
 
-            <TextBlock x:Name="MapStatus" DockPanel.Dock="Bottom"
-                       Margin="4,8,4,0" FontStyle="Italic" Foreground="Gray" TextWrapping="Wrap"/>
+            </StackPanel>
+            </ScrollViewer>
         </DockPanel>
 
         <!-- Map area with flight status bar -->

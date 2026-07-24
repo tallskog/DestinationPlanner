@@ -5,6 +5,7 @@
         Title="MSFS 2024 Flight Logbook"
         Icon="DestinationPlanner.ico"
         Height="700" Width="1100"
+        MinHeight="480" MinWidth="820"
         WindowStartupLocation="CenterScreen">
 
     <DockPanel>
