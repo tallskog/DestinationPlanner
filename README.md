@@ -17,6 +17,7 @@ Flights are logged automatically via SimConnect while you fly — no manual entr
 - **Logbook airports on map** — visited airports are shown as orange dots; a green ring indicates you departed from there, a red ring that you landed there; both rings appear when you have done both, with a small gap between them; a map legend in the sidebar explains all symbols
 - **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**; the last-used logbook is remembered across sessions so you are not prompted on every start
 - **Airport type filter (optional, OpenAIP)** — classify airports as civil, military, heliport, private, other/special-use, or unknown, and filter the map by type; requires a free OpenAIP API key — see [OpenAIP integration](#openaip-integration-optional)
+- **Precipitation radar overlay** — a **🌧 Precip** toggle in the top-left corner of the map shows current precipitation (rain, snow, sleet, or hail) via [RainViewer](https://www.rainviewer.com), no signup required; a refresh button updates it on demand — see [Weather overlay](#weather-overlay-precipitation)
 
 ## Prerequisites
 
@@ -134,6 +135,15 @@ To enable it:
 
 1. Create a free account at [accounts.openaip.net](https://accounts.openaip.net) and generate an API key on the **API Clients** page.
 2. In the app: **File → Update Airport Type Data (OpenAIP)…** — the first time, you'll be prompted to paste your API key; the app saves it to `openaip.local.json` in the AppData folder (`%LocalAppData%\DestinationPlanner\`, or `%LocalAppData%\DestinationPlanner-dev\` for Debug builds) and immediately fetches and applies the classification. This file is never committed to source control. Subsequent syncs reuse the saved key without prompting again. The result is also cached locally and reapplied automatically on the next launch.
+
+## Weather overlay (precipitation)
+
+The **🌧 Precip** / **⟳** buttons in the top-left corner of the map (not part of the filter sidebar, since this toggles a map layer rather than filtering airports) show current precipitation — rain, snow, sleet, or hail — sourced from [RainViewer](https://www.rainviewer.com)'s public radar API. No signup or API key is required.
+
+- Click **🌧 Precip** to fetch and show the most recent radar frame as an overlay on the map, drawn above the base map but below airport markers. The time shown next to the buttons is when that frame was observed.
+- Click **⟳** to refresh to the latest frame at any time.
+- **There is no automatic/background refresh.** This app is for planning a flight, not for tracking weather live — the overlay shows a snapshot of conditions at the moment you check it, and stays as-is until you click refresh again or toggle it off.
+- RainViewer's radar API is free for personal/non-commercial use; the app shows a "Radar: RainViewer" attribution link whenever the overlay is active, per their terms.
 
 ## Configuration
 

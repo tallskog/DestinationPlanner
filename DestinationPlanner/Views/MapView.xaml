@@ -80,7 +80,7 @@
                     <CheckBox IsChecked="{Binding ShowUnclassifiedAirports}" Content="Unclassified" Margin="0,0,0,5"/>
                     <TextBlock FontSize="9" Foreground="Gray" TextWrapping="Wrap">
                         Airport type data: <Hyperlink NavigateUri="https://www.openaip.net"
-                                                       RequestNavigate="OpenAipAttribution_RequestNavigate">openAIP</Hyperlink>
+                                                       RequestNavigate="Attribution_RequestNavigate">openAIP</Hyperlink>
                     </TextBlock>
                 </StackPanel>
             </GroupBox>
@@ -124,10 +124,10 @@
             <GroupBox Header="Map Legend" Margin="0,2,0,4" Padding="6,4">
                 <StackPanel>
 
-                    <!-- Unvisited airport: plain blue dot -->
+                    <!-- Unvisited airport: plain amber dot -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,5" VerticalAlignment="Center">
                         <Grid Width="22" Height="22">
-                            <Ellipse Width="9" Height="9" Fill="#1E78C8"
+                            <Ellipse Width="9" Height="9" Fill="#FFC107"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Grid>
                         <TextBlock Text="Unvisited airport" FontSize="11" VerticalAlignment="Center"/>
@@ -218,6 +218,36 @@
             <Grid>
                 <mapsui:MapControl x:Name="MapCtrl"/>
                 <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False"/>
+
+                <!-- Weather overlay controls (top-left corner) — deliberately not part of
+                     the filter sidebar; this toggles a map layer, not an airport filter. -->
+                <StackPanel x:Name="WeatherContainer"
+                            VerticalAlignment="Top" HorizontalAlignment="Left"
+                            Margin="10,10,0,0">
+                    <Border Background="White" BorderBrush="#AAAAAA" BorderThickness="1" CornerRadius="3"
+                            HorizontalAlignment="Left">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="6" ShadowDepth="1" Opacity="0.2"/>
+                        </Border.Effect>
+                        <StackPanel Orientation="Horizontal" Margin="4">
+                            <ToggleButton x:Name="PrecipitationToggleButton" Content="🌧 Precip"
+                                          Checked="PrecipitationToggle_Checked" Unchecked="PrecipitationToggle_Unchecked"
+                                          Padding="8,4" FontSize="12"/>
+                            <Button x:Name="PrecipitationRefreshButton" Content="⟳"
+                                    Click="PrecipitationRefresh_Click"
+                                    IsEnabled="False"
+                                    Padding="6,4" FontSize="12" Margin="4,0,0,0"
+                                    ToolTip="Refresh to the current radar frame"/>
+                            <TextBlock x:Name="PrecipitationStatusText" VerticalAlignment="Center"
+                                       Margin="8,0,0,0" FontSize="10" Foreground="Gray"/>
+                        </StackPanel>
+                    </Border>
+                    <TextBlock x:Name="PrecipitationAttributionText" FontSize="9" Foreground="Gray" Margin="4,2,0,0"
+                               Visibility="Collapsed">
+                        Radar: <Hyperlink NavigateUri="https://www.rainviewer.com"
+                                          RequestNavigate="Attribution_RequestNavigate">RainViewer</Hyperlink>
+                    </TextBlock>
+                </StackPanel>
 
                 <!-- Search box overlay (top-right corner) -->
                 <Grid x:Name="SearchContainer"

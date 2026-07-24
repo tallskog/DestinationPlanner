@@ -325,3 +325,28 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 **Note:** installed/production (Release) builds were never at risk — Release resolves to a separate `DestinationPlanner` folder that `dotnet test` never touches. This only affected the shared dev/test environment.
 
 **Fix:** Added an `internal` test seam, `AppSettingsService.TestOverridePath`, that redirects `Save`/`Load` to a caller-supplied path instead of the real AppData settings file. `MapViewModelAirportTypeFilterTests` sets it to a per-run temp file in its constructor and clears/deletes it in `Dispose`, so the test suite can exercise `AppSettingsService.Save` without ever touching a real settings.json.
+
+---
+
+## US38: Precipitation radar overlay on the map
+**As a pilot**, I want to see current precipitation (rain, snow, sleet, or hail) on the map when I'm planning a flight, so I can factor weather into airport/destination choices at the moment I'm planning — not as a continuously-updating live feed.
+
+**Acceptance criteria:**
+- A **🌧 Precip** toggle button and a refresh (⟳) button are shown as an overlay on top of the map itself (top-left corner), not in the filter sidebar — this is a map layer toggle, not an airport filter
+- Checking the toggle fetches the current radar frame from RainViewer's public API (`https://api.rainviewer.com/public/weather-maps.json`, no API key required) and adds it as a Mapsui tile layer directly above the OpenStreetMap base layer (so airport markers/rings/logbook layers still render on top of it)
+- No background polling: the radar frame is fetched once when the toggle is checked, and only re-fetched when the user clicks refresh — matching the app's flight-planning use case (a snapshot of current conditions), not a live weather feed
+- Unchecking the toggle removes the layer and clears the status/attribution text
+- A small status text next to the buttons shows the observed time of the currently-displayed frame (local time, `HH:mm`); shows "unavailable" if the fetch fails (network error, malformed response, etc. — never throws)
+- An attribution line ("Radar: RainViewer", linking to rainviewer.com) is shown whenever the overlay is active, per RainViewer's free-tier attribution requirement — RainViewer is the data provider's name (a proper noun, left as-is) even though the app's own UI/code calls the feature "precipitation" since the radar covers rain, snow, sleet, and hail, not just rain
+- RainViewer's public API is free for personal/non-commercial use (same license class as the OpenAIP integration, US34) with no signup/API key needed
+
+**Coverage:** `PrecipitationRadarService.ParseLatestFrame` unit-tested for the happy path (tile URL template built from the last/most-recent `radar.past` frame) and failure modes (missing host/radar/past, empty past array, missing path/time fields, malformed JSON) — all return `null` rather than throwing. `GetLatestFrameAsync` tested end-to-end with a fake `HttpMessageHandler` for both an HTTP error status and a valid response. UI wiring (the toggle/refresh buttons and the Mapsui layer add/remove) is verified manually, not by automated tests — see CLAUDE.md Testing section.
+
+---
+
+## BUG-07: "Zoom Level Not Supported" placeholder tiles at deep map zoom
+**Root cause:** RainViewer's radar tiles only exist up to zoom level 7. Requesting a deeper zoom doesn't 404 — their server returns HTTP 200 with a literal placeholder PNG containing the text "Zoom Level Not Supported", which BruTile/Mapsui renders like any other tile. Confirmed directly: fetching the real tile coordinates for a location with live rain (over the UK) at zoom 5–7 returned genuine varying radar image data, while zoom 8 and above returned the identical 1370-byte placeholder image regardless of location. Our original `HttpTileSource` used a default-range `GlobalSphericalMercator()` schema (effectively up to zoom 18, matching the OSM base layer), so zooming in past 7 filled the visible area with that placeholder text instead of radar or a blank tile.
+
+**Fix:** Capped the precipitation layer's tile schema to `GlobalSphericalMercator(0, 7)` in `MapView.xaml.cs` (`LoadPrecipitationOverlayAsync`). With the schema itself reporting a max of 7 resolution levels, BruTile can never request a deeper level — it stretches (over-zooms) the deepest real tile to fill the view instead, which is the standard, expected behavior for any raster tile layer zoomed past its source's native resolution (the same mechanism used implicitly by the OSM base layer, which just happens to support deeper zoom than this app ever needs).
+
+**Note:** `ToggleButton` automation events are `Checked`/`Unchecked`, not `Click` — `Click` does not fire when a ToggleButton's state is changed programmatically (e.g. via UI Automation's `IToggleProvider.Toggle()`), only `Checked`/`Unchecked` do. The rain toggle handlers use `Checked`/`Unchecked` for this reason.

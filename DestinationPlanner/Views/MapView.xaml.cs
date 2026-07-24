@@ -46,14 +46,23 @@ public partial class MapView : UserControl
 
     private readonly IMetarService _metarService = new MetarService();
 
+    // Precipitation radar overlay (US38) — a Mapsui tile layer toggled on/off, refreshed only
+    // on explicit user request (no background polling; see requirements.md US38).
+    private readonly IPrecipitationRadarService _precipitationRadarService = new PrecipitationRadarService();
+    private Mapsui.Tiling.Layers.TileLayer? _precipitationLayer;
+    private CancellationTokenSource? _precipitationCts;
+
     // WPF elements drawn on the Canvas overlay for the selection line
     private Line? _selectionLine;
     private TextBlock? _selectionDistLabel;
 
+    // Amber rather than blue — a blue dot disappears against blue-toned rain radar
+    // shading and ocean tiles; amber stays legible against both. Thicker outline (2f,
+    // vs. the original 1f) so the dot still reads clearly under heavy precipitation.
     private static readonly ZoomCircleStyle AirportStyle = new(
-        fill:         new MapsuiColor(30, 120, 200, 200),
-        outline:      new MapsuiColor(0, 60, 130),
-        outlineWidth: 1f);
+        fill:         new MapsuiColor(255, 193, 7, 200),
+        outline:      new MapsuiColor(140, 100, 0),
+        outlineWidth: 2f);
 
     private static readonly ZoomCircleStyle LogbookStyle = new(
         fill:         new MapsuiColor(220, 100, 0, 230),
@@ -102,11 +111,74 @@ public partial class MapView : UserControl
         Unloaded += OnUnloaded;
     }
 
-    private void OpenAipAttribution_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    private void Attribution_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
     {
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true }); }
         catch { /* best-effort — attribution link opening failures are non-fatal */ }
         e.Handled = true;
+    }
+
+    // ---- Precipitation radar overlay ----
+
+    private async void PrecipitationToggle_Checked(object sender, RoutedEventArgs e) => await LoadPrecipitationOverlayAsync();
+
+    private void PrecipitationToggle_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _precipitationCts?.Cancel();
+        RemovePrecipitationLayer();
+        PrecipitationRefreshButton.IsEnabled = false;
+        PrecipitationStatusText.Text = string.Empty;
+        PrecipitationAttributionText.Visibility = Visibility.Collapsed;
+    }
+
+    private async void PrecipitationRefresh_Click(object sender, RoutedEventArgs e) => await LoadPrecipitationOverlayAsync();
+
+    private async Task LoadPrecipitationOverlayAsync()
+    {
+        _precipitationCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _precipitationCts = cts;
+
+        PrecipitationToggleButton.IsChecked = true;
+        PrecipitationRefreshButton.IsEnabled = false;
+        PrecipitationStatusText.Text = "loading…";
+
+        var frame = await _precipitationRadarService.GetLatestFrameAsync(cts.Token);
+
+        if (cts.IsCancellationRequested) return;
+
+        if (frame is null)
+        {
+            PrecipitationStatusText.Text = "unavailable";
+            PrecipitationRefreshButton.IsEnabled = true;
+            return;
+        }
+
+        // RainViewer's tiles top out at zoom 7 — deeper requests return a literal
+        // "Zoom Level Not Supported" placeholder image instead of a 404. Capping the
+        // schema here makes BruTile stretch (over-zoom) the deepest real tile instead
+        // of requesting past it.
+        var tileSource = new BruTile.Web.HttpTileSource(
+            new BruTile.Predefined.GlobalSphericalMercator(0, 7),
+            frame.TileUrlTemplate,
+            name: "Precipitation Radar");
+
+        RemovePrecipitationLayer();
+        _precipitationLayer = new Mapsui.Tiling.Layers.TileLayer(tileSource) { Name = "Precipitation Radar" };
+        // Insert just above the OSM base layer (index 0) so airport markers/rings/logbook
+        // layers added afterwards still render on top of the radar, not underneath it.
+        MapCtrl.Map.Layers.Insert(1, _precipitationLayer);
+
+        PrecipitationStatusText.Text = frame.FrameTimeUtc.ToLocalTime().ToString("HH:mm");
+        PrecipitationRefreshButton.IsEnabled = true;
+        PrecipitationAttributionText.Visibility = Visibility.Visible;
+    }
+
+    private void RemovePrecipitationLayer()
+    {
+        if (_precipitationLayer is null) return;
+        MapCtrl.Map.Layers.Remove(_precipitationLayer);
+        _precipitationLayer = null;
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)

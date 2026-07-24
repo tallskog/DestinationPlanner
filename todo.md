@@ -38,11 +38,12 @@
 - [x] **Default logbook** — last-used logbook path is remembered across restarts (`AppSettings.LastLogbookPath`, set/read in `App.xaml.cs`); on first launch with multiple logbook files, `LogbookSelectionDialog` prompts the user to pick one.
 - [x] **Persist map filter selections** — filter values (runway length/unit, ILS, ATIS, radius, visited/not-visited, airport type, ICAO prefixes) are saved to `settings.json` on **Apply Filters** or **Clear** and restored on next launch. **Clear** still resets to the original defaults, as before — it now also persists that reset. See US36 in requirements.md.
 - [x] **Scrollable filter sidebar** — Apply Filters/Clear are now pinned at the top of the sidebar (always visible without resizing); the filter groups + Map Legend below scroll independently. Window MinWidth/MinHeight (820x480) prevents shrinking below a usable size. See US37 in requirements.md.
+- [x] **Precipitation radar overlay** — 🌧 Precip toggle + refresh button, top-left of the map (not the filter sidebar). Fetches the current frame from RainViewer's free public API on toggle/refresh only — no background polling, matching the flight-planning use case rather than a live weather feed. Named "precipitation" rather than "rain" since the radar also covers snow/sleet/hail. See US38 in requirements.md. Wind overlay (barbs) is still open, see wishlist below.
 
 ## Bugs / known issues
 
 ## Wishlist for new features
-- [ ] **Weather overlay on map** — show windbarbs and rain in map if user selects to show weather overlay
+- [ ] **Wind overlay on map** — show wind barbs on the map (rain radar overlay already done — see US38 in requirements.md)
 - [ ] **Improve radius view** — radius filtering itself works, but the centre airport still isn't visually highlighted and no radius circle is drawn on the map
 - [ ] **Status bar at the bottom of the screen** — connection status to simulator already shown; still missing the active logbook name
 - [ ] **Wildcards support in logbook** — wildcards should be supported in logbook view with departure and arrival filters (currently plain substring match)
