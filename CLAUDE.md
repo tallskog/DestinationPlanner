@@ -36,6 +36,10 @@ This keeps dev and installed-release logbooks completely separate.
 ## README.md
 - `README.md` (repo root) must be checked and updated if needed every time when implementing a change
 
+## Versioning
+- `DestinationPlanner/DestinationPlanner.csproj`'s `<Version>` must match the latest git tag (tag `vX.Y.Z` → `<Version>X.Y.Z</Version>`, no leading `v`).
+- When asked to tag a release (e.g. "tag this as vX.Y.Z"), update `<Version>` and commit that change *before* creating the tag, so the tagged commit already carries the matching version — don't tag first and fix the csproj after.
+
 ## Testing
 - Test project: `DestinationPlanner.Tests` (xUnit), run with `dotnet test DestinationPlanner.slnx`.
 - Whenever you make a code change, run `dotnet test` automatically and verify all tests pass before considering the task done — do not wait to be asked.
