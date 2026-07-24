@@ -292,3 +292,25 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 
 **Coverage — not yet implemented (backlog):**
 - UI rendering (XAML bindings, Mapsui layers, popups) and live SimConnect/MSFS behavior — verified manually, not by automated tests (see CLAUDE.md Testing section)
+
+---
+
+## US36: Persist map filter selections across sessions
+**As a user**, I want the map filters I usually use to still be set the next time I open the app, so I don't have to re-enter the same runway length, airport type, and region criteria every session.
+
+**Acceptance criteria:**
+- Clicking **Apply Filters** saves the current filter values (min/max runway, unit, instrument approach, ATIS, centre ICAO + radius, show visited/not-visited, all seven airport-type checkboxes, ICAO prefixes) to `settings.json`
+- On the next app launch, the map filters are pre-populated from the saved values instead of the hardcoded defaults
+- Clicking **Clear** resets all filters to their original defaults (as before US36) and also saves that reset state to `settings.json`, so a cleared state stays cleared on next launch
+- The same `settings.json` file is used for all settings (US31, US32)
+
+**Note:** The "reset filters to defaults" button (**Clear**) already existed prior to this requirement (`ClearFiltersCommand`); US36 only adds persistence on top of the existing apply/clear behavior.
+
+---
+
+## BUG-06: Tests overwrote the real dev settings.json, wiping the remembered logbook path
+**Root cause:** `AppDataHelper.AppDataPath` resolves to `%LocalAppData%\DestinationPlanner-dev\` under `#if DEBUG` — the same folder a real Debug build of the app uses. `DestinationPlanner.Tests` also builds in Debug, so `AppSettingsService.Save`, called from `MapViewModel.SaveFiltersToSettings()` on Apply/Clear, wrote directly to that shared real file with no test isolation. The `ClearFiltersCommand_ResetsAirportTypeFiltersToAllVisible` test built its `MapViewModel` with a blank `new AppSettings()`, so running `dotnet test` overwrote the developer's real `settings.json`, nulling out `LastLogbookPath` and resetting every filter to default — surfacing as the app re-prompting for a logbook on next launch, and would have looked like a lost preference (not lost logbook data — the XML files themselves were never touched).
+
+**Note:** installed/production (Release) builds were never at risk — Release resolves to a separate `DestinationPlanner` folder that `dotnet test` never touches. This only affected the shared dev/test environment.
+
+**Fix:** Added an `internal` test seam, `AppSettingsService.TestOverridePath`, that redirects `Save`/`Load` to a caller-supplied path instead of the real AppData settings file. `MapViewModelAirportTypeFilterTests` sets it to a per-run temp file in its constructor and clears/deletes it in `Dispose`, so the test suite can exercise `AppSettingsService.Save` without ever touching a real settings.json.

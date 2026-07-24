@@ -16,7 +16,7 @@
 
 ## General
 
-- [ ] **Persist last-used logbook path** — remember which logbook was last active so it reopens automatically on next launch (currently the user must select via File → Open Logbook… each time if there are multiple files).
+- [x] **Persist last-used logbook path** — remember which logbook was last active so it reopens automatically on next launch. Implemented via `AppSettings.LastLogbookPath` (`App.xaml.cs`); first launch with multiple logbook files prompts via `LogbookSelectionDialog`.
 - [ ] **Persist airport data path** — same idea; remember the folder so the user doesn't have to browse every time.
 - [ ] **About / help dialog** — links to OurAirports download page and MSFS SDK page.
 
@@ -35,14 +35,13 @@
 - [x] **Popup follows window move (US17.8)** — subscribes to `Window.LocationChanged` and nudges popup offsets to force WPF to reposition the layered popup HWND when the main window is dragged.
 - [x] **Airport search on map (US18)** — search box overlay (top-right of map) filters all loaded airports by ICAO prefix or name substring on every keystroke, shows a live dropdown of up to 20 results. Selecting an airport zooms the map to a ~3 km wide view and opens the primary popup (ICAO, runways, live METAR) identical to a map click. Keyboard-navigable: Down arrow enters the list, Enter selects, Escape clears.
 - [x] **SimConnect bogus departure fix** — 5-second stabilization window after connection suppresses loading-state jitter (stale coordinates and spurious brake transitions). Non-ICAO identifiers (e.g. `US-12381`) are also excluded from departure/arrival resolution.
+- [x] **Default logbook** — last-used logbook path is remembered across restarts (`AppSettings.LastLogbookPath`, set/read in `App.xaml.cs`); on first launch with multiple logbook files, `LogbookSelectionDialog` prompts the user to pick one.
+- [x] **Persist map filter selections** — filter values (runway length/unit, ILS, ATIS, radius, visited/not-visited, airport type, ICAO prefixes) are saved to `settings.json` on **Apply Filters** or **Clear** and restored on next launch. **Clear** still resets to the original defaults, as before — it now also persists that reset. See US36 in requirements.md.
 
 ## Bugs / known issues
 
 ## Wishlist for new features
 - [ ] **Weather overlay on map** — show windbarbs and rain in map if user selects to show weather overlay
-- [ ] **Improve radius view** — when a radius is selected, centre should be highlighted somehow and also a radius circle could be drawn on the map
-- [ ] **Status bar at the bottom of the screen** — connection status to simulator and the active logbook name
-- [ ] **Default logbook** — remember which logbook was used when the program is closed; on first launch, ask the user to set the logbook to be used
-- [ ] **Wildcards support in logbook** — wildcards should be supported in logbook view with departure and arrival filters
-- [ ] **Highlight logbook airports differently** — logbook airports are already orange; consider adding a label or a different shape to distinguish them more clearly at low zoom
-- [ ] **Viewport-based airport count** — status bar currently shows count of all filtered airports; narrow it to only those visible in the current viewport
+- [ ] **Improve radius view** — radius filtering itself works, but the centre airport still isn't visually highlighted and no radius circle is drawn on the map
+- [ ] **Status bar at the bottom of the screen** — connection status to simulator already shown; still missing the active logbook name
+- [ ] **Wildcards support in logbook** — wildcards should be supported in logbook view with departure and arrival filters (currently plain substring match)

@@ -10,6 +10,7 @@ public class MapViewModel : ViewModelBase
     private readonly IAirportDataService _airports;
     private readonly ILogbookService _logbook;
     private readonly ISimConnectService _sim;
+    private readonly AppSettings _settings;
 
     private int _minRunway;
     private int _maxRunway;
@@ -114,11 +115,14 @@ public class MapViewModel : ViewModelBase
     public event EventHandler? LogbookChanged;
     public event EventHandler<AircraftPositionEventArgs>? AircraftMoved;
 
-    public MapViewModel(IAirportDataService airports, ILogbookService logbook, ISimConnectService sim)
+    public MapViewModel(IAirportDataService airports, ILogbookService logbook, ISimConnectService sim, AppSettings settings)
     {
         _airports = airports;
         _logbook  = logbook;
         _sim      = sim;
+        _settings = settings;
+
+        LoadFiltersFromSettings();
 
         _logbook.FlightsChanged += (_, _) => LogbookChanged?.Invoke(this, EventArgs.Empty);
         ApplyFiltersCommand = new RelayCommand(OnApplyFilters);
@@ -310,7 +314,54 @@ public class MapViewModel : ViewModelBase
            .Where(s => s.Length > 0)
            .ToList();
 
-    private void OnApplyFilters() => FiltersApplied?.Invoke(this, EventArgs.Empty);
+    private void LoadFiltersFromSettings()
+    {
+        _minRunway = _settings.MinRunway;
+        _maxRunway = _settings.MaxRunway;
+        _useMeters = _settings.UseMeters;
+        _requireInstrumentApproach = _settings.RequireInstrumentApproach;
+        _requireAtis = _settings.RequireAtis;
+        _filterCenterIcao = _settings.FilterCenterIcao;
+        _filterRadiusNm = _settings.FilterRadiusNm;
+        _showVisited = _settings.ShowVisited;
+        _showNotVisited = _settings.ShowNotVisited;
+        _showCivilAirports = _settings.ShowCivilAirports;
+        _showMilitaryAirports = _settings.ShowMilitaryAirports;
+        _showHeliportAirports = _settings.ShowHeliportAirports;
+        _showPrivateAirports = _settings.ShowPrivateAirports;
+        _showOtherAirports = _settings.ShowOtherAirports;
+        _showUnknownAirports = _settings.ShowUnknownAirports;
+        _showUnclassifiedAirports = _settings.ShowUnclassifiedAirports;
+        _icaoPrefixes = _settings.IcaoPrefixes;
+    }
+
+    private void SaveFiltersToSettings()
+    {
+        _settings.MinRunway = MinRunway;
+        _settings.MaxRunway = MaxRunway;
+        _settings.UseMeters = UseMeters;
+        _settings.RequireInstrumentApproach = RequireInstrumentApproach;
+        _settings.RequireAtis = RequireAtis;
+        _settings.FilterCenterIcao = FilterCenterIcao;
+        _settings.FilterRadiusNm = FilterRadiusNm;
+        _settings.ShowVisited = ShowVisited;
+        _settings.ShowNotVisited = ShowNotVisited;
+        _settings.ShowCivilAirports = ShowCivilAirports;
+        _settings.ShowMilitaryAirports = ShowMilitaryAirports;
+        _settings.ShowHeliportAirports = ShowHeliportAirports;
+        _settings.ShowPrivateAirports = ShowPrivateAirports;
+        _settings.ShowOtherAirports = ShowOtherAirports;
+        _settings.ShowUnknownAirports = ShowUnknownAirports;
+        _settings.ShowUnclassifiedAirports = ShowUnclassifiedAirports;
+        _settings.IcaoPrefixes = IcaoPrefixes;
+        AppSettingsService.Save(_settings);
+    }
+
+    private void OnApplyFilters()
+    {
+        SaveFiltersToSettings();
+        FiltersApplied?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnClearFilters()
     {
@@ -331,6 +382,7 @@ public class MapViewModel : ViewModelBase
         ShowUnknownAirports = true;
         ShowUnclassifiedAirports = true;
         IcaoPrefixes = string.Empty;
+        SaveFiltersToSettings();
         FiltersApplied?.Invoke(this, EventArgs.Empty);
     }
 

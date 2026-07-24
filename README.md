@@ -1,6 +1,10 @@
 # MSFS 2024 Flight Logbook & Destination Planner
 
-A Windows desktop application for Microsoft Flight Simulator 2024 that combines a flight logbook with an interactive world map. It records flights automatically via SimConnect and lets you explore airports filtered by runway length, instrument approach capability, and distance from a chosen airport.
+**Where should I fly next?** This app answers that question visually. It plots every airport in the world on an interactive map alongside your personal flight history, so you can see at a glance where you've already been and where you haven't — then filter the map down to airports that actually make sense for the aircraft you fly.
+
+It grew out of a personal project: systematically flying to every civil airport in Europe suitable for an A320, one region at a time, then moving on to the next continent. The map makes it obvious which nearby airports are still unvisited, and filters (runway length, instrument approach, airport type) narrow the field down to realistic candidates instead of every dot on the map. The same filters work just as well the other way around — if your interest is bush flying into short strips in a Piper Cub, or working through every military field in a region, set the filters to match and the map adapts to your goals instead of the developer's.
+
+Flights are logged automatically via SimConnect while you fly — no manual entry — so the "visited" picture on the map stays current on its own.
 
 ## Features
 
@@ -115,7 +119,7 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
 | ICAO prefixes | Comma-separated prefixes to restrict by country or region (e.g. `EF,ES`) |
 | Airport Type | Civil / Military / Heliport / Private / Other (Special-Use) / Unknown / Unclassified — all checked by default. Unclassified covers every airport until you sync OpenAIP data (see below) |
 
-Click **Apply Filters** to update the map. **Clear** resets all filters to their defaults.
+Click **Apply Filters** to update the map. **Clear** resets all filters to their defaults. Filter selections are remembered across app restarts — whatever was active the last time you clicked **Apply Filters** (or **Clear**) is restored automatically on the next launch, so recurring searches don't need to be re-entered every session.
 
 ### Airport search
 A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.
@@ -146,6 +150,7 @@ A `settings.json` file is created automatically in the AppData directory (`%Loca
 |---|---|---|
 | `SimDataRateHz` | `60` | SimConnect sampling rate. Values > 1 use visual-frame sampling; at 60 fps sim framerate, 60 = every frame, 10 = every 6th frame. A value of 1 uses once-per-second sampling. |
 | `LastLogbookPath` | *(auto-set)* | Path of the logbook opened in the previous session. Set automatically; edit to override. |
+| `MinRunway`, `MaxRunway`, `UseMeters`, `RequireInstrumentApproach`, `RequireAtis`, `FilterCenterIcao`, `FilterRadiusNm`, `ShowVisited`, `ShowNotVisited`, `ShowCivilAirports`, `ShowMilitaryAirports`, `ShowHeliportAirports`, `ShowPrivateAirports`, `ShowOtherAirports`, `ShowUnknownAirports`, `ShowUnclassifiedAirports`, `IcaoPrefixes` | *(auto-set)* | The Map tab's filter selections, saved automatically whenever **Apply Filters** or **Clear** is clicked and restored on the next launch. |
 
 ## Project structure
 

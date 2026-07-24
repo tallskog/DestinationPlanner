@@ -1,11 +1,30 @@
+using DestinationPlanner.Helpers;
 using DestinationPlanner.Models;
 using DestinationPlanner.Tests.Fakes;
 using DestinationPlanner.ViewModels;
+using System.IO;
 
 namespace DestinationPlanner.Tests.ViewModels;
 
-public class MapViewModelAirportTypeFilterTests
+// IDisposable: MapViewModel writes filter settings via AppSettingsService.Save on Apply/Clear.
+// Without redirecting it to a throwaway file, tests would overwrite the real dev settings.json
+// (AppDataHelper resolves to the same DEBUG AppData folder used by a real dev build of the app).
+public class MapViewModelAirportTypeFilterTests : IDisposable
 {
+    private readonly string _tempSettingsPath =
+        Path.Combine(Path.GetTempPath(), $"dp-test-settings-{Guid.NewGuid():N}.json");
+
+    public MapViewModelAirportTypeFilterTests()
+    {
+        AppSettingsService.TestOverridePath = _tempSettingsPath;
+    }
+
+    public void Dispose()
+    {
+        AppSettingsService.TestOverridePath = null;
+        try { File.Delete(_tempSettingsPath); } catch { /* best-effort cleanup */ }
+    }
+
     private static MapViewModel CreateViewModel(out FakeLogbookService logbook)
     {
         var airports = new FakeAirportDataService(new[]
@@ -19,7 +38,7 @@ public class MapViewModelAirportTypeFilterTests
             new Airport { Icao = "ZZZZ", Name = "Unclassified Field", Latitude = 10.0, Longitude = 20.0, Type = AirportType.Unclassified },
         });
         logbook = new FakeLogbookService();
-        return new MapViewModel(airports, logbook, new FakeSimConnectService());
+        return new MapViewModel(airports, logbook, new FakeSimConnectService(), new AppSettings());
     }
 
     [Fact]

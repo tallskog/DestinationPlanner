@@ -53,6 +53,6 @@ public class MainViewModel : ViewModelBase
         SimConnect = sim;
 
         Logbook = new LogbookViewModel(logbook, settings);
-        Map     = new MapViewModel(AirportData, logbook, sim);
+        Map     = new MapViewModel(AirportData, logbook, sim, settings);
     }
 }

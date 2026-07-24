@@ -16,6 +16,12 @@ Solution: `DestinationPlanner.slnx`, project: `DestinationPlanner/DestinationPla
 4. Parse nullable numbers with the `ParseNullDouble` helper.
 5. Bump the schema version attribute (`version="1.x"`) when shipping a format change.
 
+## Backwards compatibility & data safety
+Before marking any task done, check whether it touches persisted user data — logbook XML, `settings.json`, or any cached file under the AppData folder (e.g. `openaip.local.json`, `openaip-airport-types.json`). If it does, verify explicitly (not just "should be fine") that a file written by the previous version still loads correctly and that no existing value is silently reset, dropped, or overwritten with a default. This is not optional — a user upgrading must never lose a logbook entry, a remembered setting, or a cached credential.
+- New fields added to `AppSettings` or any other JSON-serialized settings/cache object must deserialize safely from an older file that lacks them (missing → type default, never an exception). Apply the same nullable/safe-fallback discipline as the logbook Serializer rules below to *any* persisted format, not just the logbook XML.
+- Never let test code or throwaway tooling write to the real AppData path (`AppDataHelper.AppDataPath` / the real `settings.json`) — Debug builds and the test project resolve to the *same* `DestinationPlanner-dev` folder a real dev build uses, so an unguarded `AppSettingsService.Save` call in a test silently overwrites the developer's actual settings (this happened once — see `BUG-06` in `requirements.md`). Use `AppSettingsService.TestOverridePath` (or an equivalent isolated path) whenever a test exercises a code path that persists settings.
+- When changing a ViewModel or service that calls `AppSettingsService.Save`/`Load`, `NativeLogbookSerializer`, or any other persistence code, ask directly: "if the user's existing file already has data in the old shape, does this change preserve it?" — and verify by inspecting an existing real file's contents before/after, not just by reasoning about the code.
+
 ## AppData path convention
 - **Release builds**: `%LocalAppData%\DestinationPlanner\`
 - **Debug builds**: `%LocalAppData%\DestinationPlanner-dev\`  (`#if DEBUG` in `AppDataHelper.cs`)

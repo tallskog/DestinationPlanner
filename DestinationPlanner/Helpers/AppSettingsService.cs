@@ -7,8 +7,13 @@ public static class AppSettingsService
 {
     private static readonly JsonSerializerOptions _writeOptions = new() { WriteIndented = true };
 
+    // Test seam: when set, Save/Load use this path instead of the real AppData settings.json.
+    // Without it, automated tests (which also run in the DEBUG configuration) would read/write
+    // the same settings.json used by a real dev build, clobbering LastLogbookPath and filters.
+    internal static string? TestOverridePath { get; set; }
+
     private static string SettingsPath =>
-        Path.Combine(AppDataHelper.AppDataPath, "settings.json");
+        TestOverridePath ?? Path.Combine(AppDataHelper.AppDataPath, "settings.json");
 
     public static AppSettings Load()
     {
