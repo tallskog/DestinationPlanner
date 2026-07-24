@@ -39,7 +39,7 @@ This keeps dev and installed-release logbooks completely separate.
 ## Versioning
 - `DestinationPlanner/DestinationPlanner.csproj`'s `<Version>` must match the latest git tag (tag `vX.Y.Z` → `<Version>X.Y.Z</Version>`, no leading `v`).
 - When asked to tag a release (e.g. "tag this as vX.Y.Z"), update `<Version>` and commit that change *before* creating the tag, so the tagged commit already carries the matching version — don't tag first and fix the csproj after.
-- **Whenever the user says "push"**, before pushing: classify the change(s) since the last tag under semver and bump `<Version>` accordingly (commit the bump, then move/create the tag to match, per the rule above), rather than pushing the version as-is.
+- **Whenever the user says "push"**, this means the whole sequence end-to-end, not just the version bump: classify the change(s) since the last tag under semver, bump `<Version>` accordingly, commit that bump, create/move the git tag to match, then push both the commits and the tag to GitHub (`origin`) — all without waiting for a separate "yes, actually push" confirmation, since saying "push" already is that confirmation.
   - **Patch** (`X.Y.Z+1`) — bug fix only, no new capability (e.g. BUG-06/BUG-07-style postmortems).
   - **Minor** (`X.Y+1.0`) — a new feature or capability added, backward-compatible (e.g. US36 filter persistence, US38 precipitation overlay).
   - **Major** (`X+1.0.0`) — a breaking/incompatible change: old logbook/settings files would no longer load correctly, or a documented behavior a user could depend on is removed/changed incompatibly. Rare for this app given the Serializer rules and Backwards compatibility section above are designed to avoid exactly this.
