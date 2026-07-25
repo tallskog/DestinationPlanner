@@ -19,6 +19,7 @@ Flights are logged automatically via SimConnect while you fly — no manual entr
 - **Airport type filter (optional, OpenAIP)** — classify airports as civil, military, heliport, private, other/special-use, or unknown, and filter the map by type; requires a free OpenAIP API key — see [OpenAIP integration](#openaip-integration-optional)
 - **Precipitation radar overlay** — a **🌧 Precip** toggle in the top-left corner of the map shows current precipitation (rain, snow, sleet, or hail) via [RainViewer](https://www.rainviewer.com), no signup required; a refresh button updates it on demand — see [Weather overlay](#weather-overlay)
 - **Wind barb overlay** — a **🎏 Wind** toggle in the top-left corner of the map shows wind speed/direction as barbs at a flight level you choose (Surface up to FL390), via [Open-Meteo](https://open-meteo.com), no signup required — see [Weather overlay](#weather-overlay)
+- **About window** — **Help → About** lists every external data source the app uses (OurAirports, OpenAIP, Open-Meteo, RainViewer, Aviation Weather Center, OpenStreetMap), each linking to the provider's site
 
 ## Prerequisites
 
@@ -126,6 +127,9 @@ Click **Apply Filters** to update the map. **Clear** resets all filters to their
 ### Airport search
 A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.
 
+### About / data sources
+**Help → About** opens a window showing the app's version and every external data source it pulls from (OurAirports, OpenAIP, Open-Meteo, RainViewer, Aviation Weather Center, OpenStreetMap), each a clickable link to the provider's site.
+
 ## OpenAIP integration (optional)
 
 Airport type classification (civil / military / heliport / private / other-special-use / unknown) is sourced from [OpenAIP](https://www.openaip.net)'s public `/airports` API. This is entirely optional — without it, every airport shows as "Unclassified" and the app behaves exactly as it does today.
@@ -134,7 +138,7 @@ OpenAIP's data is licensed [CC BY-NC 4.0](https://creativecommons.org/licenses/b
 
 To enable it:
 
-1. Create a free account at [accounts.openaip.net](https://accounts.openaip.net) and generate an API key on the **API Clients** page.
+1. Create a free account at [openaip.net](https://www.openaip.net) (top-right corner), then open your profile icon → **API Clients** and generate an API key there.
 2. In the app: **File → Update Airport Type Data (OpenAIP)…** — the first time, you'll be prompted to paste your API key; the app saves it to `openaip.local.json` in the AppData folder (`%LocalAppData%\DestinationPlanner\`, or `%LocalAppData%\DestinationPlanner-dev\` for Debug builds) and immediately fetches and applies the classification. This file is never committed to source control. Subsequent syncs reuse the saved key without prompting again. The result is also cached locally and reapplied automatically on the next launch.
 
 ## Weather overlay

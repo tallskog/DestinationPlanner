@@ -258,7 +258,7 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 - The "Airport Type" filter group in the map sidebar offers seven checkboxes — Civil / Military / Heliport / Private / Other (Special-Use) / Unknown / Unclassified — all checked by default
 - The Airport Type filter applies uniformly to all map layers (all airports, logbook, departed, landed) via the same shared filter logic used by the runway/ILS/ATIS/radius filters
 - Authentication is a single OpenAIP API key, sent as the `x-openaip-api-key` request header — no OAuth flow, no sign-in dialog, no stored session
-- The API key is never committed to source control; it is read at runtime from a local, un-committed file (`openaip.local.json`) in the AppData folder — if absent, the "Update Airport Type Data (OpenAIP)…" menu action prompts the user for the key in-app (with a link to `accounts.openaip.net` to get one) and saves it to that file so future syncs don't require re-entering it; cancelling the prompt aborts the sync without error
+- The API key is never committed to source control; it is read at runtime from a local, un-committed file (`openaip.local.json`) in the AppData folder — if absent, the "Update Airport Type Data (OpenAIP)…" menu action prompts the user for the key in-app (with a link to `www.openaip.net` — register there, then generate a key from the profile icon's **API Clients** page; `accounts.openaip.net`, used here previously, no longer resolves) and saves it to that file so future syncs don't require re-entering it; cancelling the prompt aborts the sync without error
 - The most recently fetched OpenAIP airport classification data is cached locally (`openaip-airport-types.json` in AppData) and re-applied automatically on the next launch, without requiring a network call
 - OpenAIP's data is licensed CC BY-NC 4.0 (Attribution-NonCommercial): the app displays an in-app attribution link to https://www.openaip.net near the Airport Type filter, and the feature is only used for DestinationPlanner's non-commercial, free distribution
 
@@ -406,5 +406,19 @@ US25.4: [DONE] The application window shall be disabled during the download to p
 **Fix:**
 1. `IWindDataService.GetWindGridAsync` now returns a `WindFetchResult` (`Models/WindFetchResult.cs`) instead of a nullable list: `Samples` plus an optional `WindFetchFailure` (`RateLimited`, `ServiceUnavailable`, or `NetworkError`). `WindDataService` classifies the HTTP status of a failed request and retries a `RateLimited`/`ServiceUnavailable` failure up to twice with a short backoff (1s, then 2s; injectable via the constructor so tests don't wait on real delays) before giving up. `MapView.LoadWindBarbsAsync` shows a distinct status per failure kind ("rate limited, try again shortly" / "Open-Meteo unavailable" / "network error") instead of one generic "unavailable".
 2. `LoadWindBarbsAsync` now checks the viewport span against `WindMaxViewportSpanDeg` (80°) before building the fetch grid at all; if either dimension exceeds it, the fetch is skipped and the status shows "zoom in to see wind barbs" instead of spending a request on a globe-spanning grid.
+
+---
+
+## US40: About window listing external data sources
+**As a user**, I want a Help → About window that lists every third-party data source the app pulls from, so I know what's powering the map/weather/airport data and can find each provider's own site (attribution, terms, status).
+
+**Acceptance criteria:**
+- `Help` menu gets an `About…` item, opening `AboutWindow` (modal, `Owner = MainWindow`, matching the existing `OpenAipApiKeyDialog`/`LandingRatingDetailWindow` pattern — `CenterOwner`, `ResizeMode="NoResize"`, `ShowInTaskbar="False"`)
+- Shows the app name and running version (read from the executing assembly, which .NET derives from the csproj `<Version>` — so it can never drift out of sync with the actual build)
+- Lists every external data source currently integrated, each as a clickable hyperlink to the provider's site plus a one-line description of what it's used for: **OurAirports** (airport/runway/frequency master data), **OpenAIP** (airport type classification), **Open-Meteo** (wind barb overlay), **RainViewer** (precipitation radar overlay), **Aviation Weather Center/NOAA** (METAR reports), **OpenStreetMap** (base map tiles)
+- Hyperlinks open in the system's default browser (`Process.Start` with `UseShellExecute = true`), matching the existing hyperlink handler pattern already used elsewhere in the app
+- A `Close` button (also wired as `IsCancel`, so Esc closes it too)
+
+**Coverage:** UI-only (a static informational window with no branching logic to unit test) — verified manually, not by automated tests, per CLAUDE.md's Testing section. If a new external data source is integrated in the future, add it here alongside updating this window.
 
 The temporary diagnostic logging added to `WindDataService` to find this (an unconditional `File.AppendAllText` under the app's own AppData folder) was removed once the root cause was found — per the CLAUDE.md rule against ad hoc code writing to the real dev AppData path, it had already polluted that folder's contents with entries from a `dotnet test` run (the fake-handler-driven 503 test case), which briefly looked like — and had to be distinguished from — a real user-facing failure while diagnosing this.

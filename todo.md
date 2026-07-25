@@ -18,7 +18,6 @@
 
 - [x] **Persist last-used logbook path** — remember which logbook was last active so it reopens automatically on next launch. Implemented via `AppSettings.LastLogbookPath` (`App.xaml.cs`); first launch with multiple logbook files prompts via `LogbookSelectionDialog`.
 - [ ] **Persist airport data path** — same idea; remember the folder so the user doesn't have to browse every time.
-- [ ] **About / help dialog** — links to OurAirports download page and MSFS SDK page.
 
 ## Done
 
@@ -44,6 +43,8 @@
 - [x] **Precip + Wind controls combined into one row** — Wind toggle/refresh/flight-level dropdown moved to the right of Precip (with a divider), instead of a separate row below.
 - [x] **Fixed wind barbs frequently showing "unavailable" while panning/zooming** — viewport-triggered auto-fetches now respect a 4-second cooldown between each other, since a burst of pan/zoom adjustments could trip Open-Meteo's short-window request throttling. Explicit actions (Refresh, toggle, flight-level change) are never throttled. See BUG-09 in requirements.md.
 - [x] **Fixed wind barbs silently never updating on pan/zoom** — the cooldown above was first built by mutating the debounce timer's own interval, which could get "stuck" long and never fire again if the user kept moving the map. Split into two independent timers so the debounce interval is always fixed at 600ms. See BUG-10 in requirements.md.
+- [x] **Fixed wind barbs still showing generic "unavailable"** — a 503/429/network error all looked identical, and a fetch at (near) whole-world zoom sent an expensive, unreadable globe-spanning request. `GetWindGridAsync` now returns a distinguishable failure reason and retries a transient 503/429 with backoff; the map skips fetching (and explains why) past a set zoom-out threshold. See BUG-11 in requirements.md.
+- [x] **About window with external data source list** — Help → About opens a window listing app version plus every external data source in use (OurAirports, OpenAIP, Open-Meteo, RainViewer, Aviation Weather Center, OpenStreetMap), each linking to the provider's site. See US40 in requirements.md.
 
 ## Bugs / known issues
 

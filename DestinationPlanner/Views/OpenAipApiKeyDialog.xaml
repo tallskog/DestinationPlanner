@@ -9,8 +9,9 @@
     <StackPanel Margin="16">
         <TextBlock TextWrapping="Wrap" Margin="0,0,0,8">
             Enter your OpenAIP API key to enable airport type classification. Create a free
-            account and generate a key at
-            <Hyperlink NavigateUri="https://accounts.openaip.net" RequestNavigate="Hyperlink_RequestNavigate">accounts.openaip.net</Hyperlink>.
+            account at
+            <Hyperlink NavigateUri="https://www.openaip.net" RequestNavigate="Hyperlink_RequestNavigate">openaip.net</Hyperlink>,
+            then generate a key from your profile icon → API Clients.
         </TextBlock>
 
         <TextBox x:Name="ApiKeyBox" Margin="0,0,0,4"/>

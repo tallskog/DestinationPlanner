@@ -308,5 +308,7 @@ public partial class MainWindow : Window
 
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void About_Click(object sender, RoutedEventArgs e) => new AboutWindow { Owner = this }.ShowDialog();
+
     private static string? NullIfMissing(string path) => File.Exists(path) ? path : null;
 }
