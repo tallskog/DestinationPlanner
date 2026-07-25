@@ -17,7 +17,8 @@ Flights are logged automatically via SimConnect while you fly — no manual entr
 - **Logbook airports on map** — visited airports are shown as orange dots; a green ring indicates you departed from there, a red ring that you landed there; both rings appear when you have done both, with a small gap between them; a map legend in the sidebar explains all symbols
 - **Multiple logbooks** — create multiple logbook files; switch between them at any time via **File → Open Logbook…**; the last-used logbook is remembered across sessions so you are not prompted on every start
 - **Airport type filter (optional, OpenAIP)** — classify airports as civil, military, heliport, private, other/special-use, or unknown, and filter the map by type; requires a free OpenAIP API key — see [OpenAIP integration](#openaip-integration-optional)
-- **Precipitation radar overlay** — a **🌧 Precip** toggle in the top-left corner of the map shows current precipitation (rain, snow, sleet, or hail) via [RainViewer](https://www.rainviewer.com), no signup required; a refresh button updates it on demand — see [Weather overlay](#weather-overlay-precipitation)
+- **Precipitation radar overlay** — a **🌧 Precip** toggle in the top-left corner of the map shows current precipitation (rain, snow, sleet, or hail) via [RainViewer](https://www.rainviewer.com), no signup required; a refresh button updates it on demand — see [Weather overlay](#weather-overlay)
+- **Wind barb overlay** — a **🎏 Wind** toggle in the top-left corner of the map shows wind speed/direction as barbs at a flight level you choose (Surface up to FL390), via [Open-Meteo](https://open-meteo.com), no signup required — see [Weather overlay](#weather-overlay)
 
 ## Prerequisites
 
@@ -136,14 +137,27 @@ To enable it:
 1. Create a free account at [accounts.openaip.net](https://accounts.openaip.net) and generate an API key on the **API Clients** page.
 2. In the app: **File → Update Airport Type Data (OpenAIP)…** — the first time, you'll be prompted to paste your API key; the app saves it to `openaip.local.json` in the AppData folder (`%LocalAppData%\DestinationPlanner\`, or `%LocalAppData%\DestinationPlanner-dev\` for Debug builds) and immediately fetches and applies the classification. This file is never committed to source control. Subsequent syncs reuse the saved key without prompting again. The result is also cached locally and reapplied automatically on the next launch.
 
-## Weather overlay (precipitation)
+## Weather overlay
 
-The **🌧 Precip** / **⟳** buttons in the top-left corner of the map (not part of the filter sidebar, since this toggles a map layer rather than filtering airports) show current precipitation — rain, snow, sleet, or hail — sourced from [RainViewer](https://www.rainviewer.com)'s public radar API. No signup or API key is required.
+Both weather overlays live as buttons in the top-left corner of the map — not in the filter sidebar, since they toggle map layers rather than filter airports — and both follow the same philosophy: **no automatic/background refresh.** This app is for planning a flight, not for tracking weather live. Each overlay shows a snapshot of conditions at the moment you check it (or last refreshed), and stays as-is — including through panning/zooming — until you click refresh again or toggle it off.
+
+### Precipitation
+
+The **🌧 Precip** / **⟳** buttons show current precipitation — rain, snow, sleet, or hail — sourced from [RainViewer](https://www.rainviewer.com)'s public radar API. No signup or API key is required.
 
 - Click **🌧 Precip** to fetch and show the most recent radar frame as an overlay on the map, drawn above the base map but below airport markers. The time shown next to the buttons is when that frame was observed.
 - Click **⟳** to refresh to the latest frame at any time.
-- **There is no automatic/background refresh.** This app is for planning a flight, not for tracking weather live — the overlay shows a snapshot of conditions at the moment you check it, and stays as-is until you click refresh again or toggle it off.
 - RainViewer's radar API is free for personal/non-commercial use; the app shows a "Radar: RainViewer" attribution link whenever the overlay is active, per their terms.
+
+### Wind barbs
+
+The **🎏 Wind** / **⟳** buttons and the flight-level dropdown show wind speed and direction as barbs (shaft + tick marks/pennants — standard 5/10/50 kt increments), sourced from [Open-Meteo](https://open-meteo.com)'s free public forecast API. No signup or API key is required, and coverage is global.
+
+- Choose a flight level from the dropdown — Surface, 3,000 ft, 6,000 ft, 9,000 ft, 12,000 ft, 18,000 ft (FL180), 24,000 ft (FL240), 30,000 ft (FL300), 34,000 ft (FL340), or 39,000 ft (FL390) — the same standard levels used on aviation winds-aloft charts.
+- Click **🎏 Wind** to sample a grid of points across the *currently visible* map area and draw a barb at each one. Click **⟳** to resample after panning/zooming, or after changing the flight level while the overlay is already on (changing the level also resamples automatically).
+- Barbs point toward the direction the wind is blowing *from* (standard meteorological convention); more/longer tick marks and filled triangles mean stronger wind (each full tick = 10 kt, each half tick = 5 kt, each filled triangle = 50 kt).
+- Because the sample grid is tied to the visible area rather than the whole world, it does not follow you as you pan — refresh again once you've moved to where you want to check.
+- Zoomed out further than a normal continental view (e.g. the whole world), the overlay shows "zoom in to see wind barbs" instead of fetching — at that scale the grid would be too sparse to be readable anyway.
 
 ## Configuration
 

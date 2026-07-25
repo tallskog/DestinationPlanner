@@ -18,6 +18,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 
 namespace DestinationPlanner.Views;
 
@@ -51,6 +52,48 @@ public partial class MapView : UserControl
     private readonly IPrecipitationRadarService _precipitationRadarService = new PrecipitationRadarService();
     private Mapsui.Tiling.Layers.TileLayer? _precipitationLayer;
     private CancellationTokenSource? _precipitationCts;
+
+    // Wind barb overlay (US39) — WPF-drawn glyphs on SelectionOverlay (like the aircraft
+    // marker), not a Mapsui layer, since barbs are composite vector shapes rather than tiles.
+    // Refreshed only on explicit user request or flight-level change — no background polling.
+    private readonly IWindDataService _windDataService = new WindDataService();
+    private CancellationTokenSource? _windCts;
+    private readonly List<UIElement> _windBarbElements = [];
+    private IReadOnlyList<WindSample> _lastWindSamples = [];
+    // Fetch grid: what's actually queried from Open-Meteo, kept safely under the ~450-500
+    // point ceiling where their server starts rejecting the batched GET URL as too long
+    // (empirically tested: 450 points/~7.3KB URL succeeds, 520 points/~8.4KB fails with a
+    // literal nginx 414). Visual grid: what's actually drawn, via bilinear interpolation
+    // (see InterpolateVisualGrid) — this is what makes the overlay look like a dense flow
+    // field rather than a sparse set of dots, without needing one fetched point per barb.
+    private const int WindFetchGridColumns = 16;
+    private const int WindFetchGridRows = 11;
+    private const int WindVisualGridColumns = 44;
+    private const int WindVisualGridRows = 28;
+    // At (near) whole-world zoom, the same fetch grid would be spread across the entire
+    // globe — spacing points thousands of km apart, which isn't a usefully readable wind
+    // picture, and spends an expensive batched request that makes tripping Open-Meteo's
+    // rate limit (BUG-09/BUG-11) more likely on the very next real, in-area fetch. Chosen
+    // generously above any normal continental/ocean-crossing view (empirically up to
+    // ~35 degrees of longitude for a full-Europe view) while still well below a world span.
+    private const double WindMaxViewportSpanDeg = 80.0;
+    // Debounces re-sampling the wind grid after pan/zoom: the grid is sampled from the
+    // viewport at fetch time, so zooming in on a world-wide sample can leave the new view
+    // with no barbs at all unless the grid is refreshed for the new area. Re-fetching on
+    // every intermediate ViewportChanged event during a drag/zoom gesture would spam the
+    // API, so this timer resets on each change and only fires once the view settles.
+    private DispatcherTimer? _windViewportDebounceTimer;
+    private DispatcherTimer? _windCooldownWaitTimer;
+    private static readonly TimeSpan WindViewportDebounceInterval = TimeSpan.FromMilliseconds(600);
+    // A single settle is not enough on its own — a user doing several distinct pan/zoom
+    // adjustments within a few seconds (e.g. zoom, pause, zoom again) would still fire one
+    // auto-fetch per settle, and Open-Meteo's free/anonymous tier rate-limits (HTTP 429)
+    // surprisingly quickly under that pattern. This additionally enforces a minimum gap
+    // between auto-triggered fetches specifically; explicit user actions (Refresh click,
+    // toggling on, changing flight level) are never throttled by this — only fetches that
+    // happen purely because the map moved are.
+    private DateTime _lastWindAutoFetchUtc = DateTime.MinValue;
+    private static readonly TimeSpan WindAutoFetchCooldown = TimeSpan.FromSeconds(4);
 
     // WPF elements drawn on the Canvas overlay for the selection line
     private Line? _selectionLine;
@@ -109,6 +152,9 @@ public partial class MapView : UserControl
         InitializeComponent();
         Loaded   += OnLoaded;
         Unloaded += OnUnloaded;
+
+        WindFlightLevelCombo.ItemsSource = WindFlightLevel.Standard;
+        WindFlightLevelCombo.SelectedIndex = 0;
     }
 
     private void Attribution_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
@@ -181,6 +227,322 @@ public partial class MapView : UserControl
         _precipitationLayer = null;
     }
 
+    // ---- Wind barb overlay ----
+
+    private async void WindToggle_Checked(object sender, RoutedEventArgs e) => await LoadWindBarbsAsync();
+
+    private void WindToggle_Unchecked(object sender, RoutedEventArgs e)
+    {
+        _windCts?.Cancel();
+        _windViewportDebounceTimer?.Stop();
+        _windCooldownWaitTimer?.Stop();
+        ClearWindBarbs();
+        WindRefreshButton.IsEnabled = false;
+        WindStatusText.Text = string.Empty;
+        WindAttributionText.Visibility = Visibility.Collapsed;
+    }
+
+    private async void WindRefresh_Click(object sender, RoutedEventArgs e) => await LoadWindBarbsAsync();
+
+    // Changing the flight level is itself an explicit user action (not background polling),
+    // so it re-fetches immediately — but only while the overlay is actually on; otherwise this
+    // just remembers the selection for the next time the toggle is checked. Also a no-op
+    // during construction, before WindToggleButton has a real IsChecked state.
+    private async void WindFlightLevelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized || WindToggleButton.IsChecked != true) return;
+        await LoadWindBarbsAsync();
+    }
+
+    private async Task LoadWindBarbsAsync()
+    {
+        _windCts?.Cancel();
+        var cts = new CancellationTokenSource();
+        _windCts = cts;
+
+        // Reset regardless of what triggered this fetch, so a manual Refresh/toggle/level
+        // change also postpones the next viewport-triggered auto-fetch by the full cooldown
+        // rather than letting one fire again immediately after.
+        _lastWindAutoFetchUtc = DateTime.UtcNow;
+
+        WindToggleButton.IsChecked = true;
+        WindRefreshButton.IsEnabled = false;
+        WindStatusText.Text = "loading…";
+
+        var level = (WindFlightLevel)WindFlightLevelCombo.SelectedItem;
+        var bounds = GetViewportLonLatBounds();
+
+        if (bounds.MaxLon - bounds.MinLon > WindMaxViewportSpanDeg ||
+            bounds.MaxLat - bounds.MinLat > WindMaxViewportSpanDeg)
+        {
+            WindStatusText.Text = "zoom in to see wind barbs";
+            WindRefreshButton.IsEnabled = true;
+            return;
+        }
+
+        var fetchPoints = BuildGridPoints(bounds, WindFetchGridColumns, WindFetchGridRows);
+
+        var result = await _windDataService.GetWindGridAsync(fetchPoints, level.PressureHPa, cts.Token);
+
+        if (cts.IsCancellationRequested) return;
+
+        if (result.Failure is not null)
+        {
+            WindStatusText.Text = result.Failure switch
+            {
+                WindFetchFailure.RateLimited => "rate limited, try again shortly",
+                WindFetchFailure.ServiceUnavailable => "Open-Meteo unavailable",
+                _ => "network error",
+            };
+            WindRefreshButton.IsEnabled = true;
+            return;
+        }
+
+        var samples = result.Samples;
+        if (samples.Count == 0)
+        {
+            WindStatusText.Text = "no wind data for this area";
+            WindRefreshButton.IsEnabled = true;
+            return;
+        }
+
+        // Open-Meteo's free API is queried at a modest, URL-length-safe resolution
+        // (empirically: batches beyond ~450-500 points hit the server's own URI-length
+        // limit), then interpolated up to a much denser visual grid for rendering — the
+        // same "coarse model grid, dense rendered flow field" approach real wind-map
+        // visualizations use, rather than trying to fetch one point per drawn barb.
+        IReadOnlyList<WindSample> visualSamples =
+            samples.Count == WindFetchGridColumns * WindFetchGridRows
+                ? InterpolateVisualGrid(samples, bounds)
+                : samples; // partial fetch result — fall back to drawing exactly what we got
+
+        _lastWindSamples = visualSamples;
+        DrawWindBarbs(visualSamples);
+
+        WindStatusText.Text = $"{visualSamples.Count} pts";
+        WindRefreshButton.IsEnabled = true;
+        WindAttributionText.Visibility = Visibility.Visible;
+    }
+
+    private (double MinLat, double MaxLat, double MinLon, double MaxLon) GetViewportLonLatBounds()
+    {
+        var vp = MapCtrl.Map.Navigator.Viewport;
+        double halfW = vp.Width  / 2.0 * vp.Resolution;
+        double halfH = vp.Height / 2.0 * vp.Resolution;
+
+        double minLon = GeoHelper.MercatorXToLon(vp.CenterX - halfW);
+        double maxLon = GeoHelper.MercatorXToLon(vp.CenterX + halfW);
+        double minLat = Math.Clamp(GeoHelper.MercatorYToLat(vp.CenterY - halfH), -85.0, 85.0);
+        double maxLat = Math.Clamp(GeoHelper.MercatorYToLat(vp.CenterY + halfH), -85.0, 85.0);
+        return (minLat, maxLat, minLon, maxLon);
+    }
+
+    // Builds an evenly-spaced cols x rows grid of (lat, lon) within the given bounds,
+    // row-major (matches the ordering GetWindGridAsync's results come back in).
+    private static List<(double Lat, double Lon)> BuildGridPoints(
+        (double MinLat, double MaxLat, double MinLon, double MaxLon) bounds, int cols, int rows)
+    {
+        var points = new List<(double, double)>(cols * rows);
+        for (int row = 0; row < rows; row++)
+        {
+            double lat = bounds.MinLat + (row + 0.5) / rows * (bounds.MaxLat - bounds.MinLat);
+            for (int col = 0; col < cols; col++)
+            {
+                double lon = bounds.MinLon + (col + 0.5) / cols * (bounds.MaxLon - bounds.MinLon);
+                points.Add((lat, lon));
+            }
+        }
+        return points;
+    }
+
+    // Bilinearly interpolates the coarse fetched grid up to WindVisualGridColumns x
+    // WindVisualGridRows points. Interpolating via u/v vector components (not raw
+    // direction degrees) is essential — naively averaging e.g. 350° and 10° gives 180°
+    // (exactly backwards) instead of the correct ~0°, since direction wraps at 360°.
+    private static List<WindSample> InterpolateVisualGrid(
+        IReadOnlyList<WindSample> fetched, (double MinLat, double MaxLat, double MinLon, double MaxLon) bounds)
+    {
+        var visualPoints = BuildGridPoints(bounds, WindVisualGridColumns, WindVisualGridRows);
+        var result = new List<WindSample>(visualPoints.Count);
+
+        for (int vr = 0; vr < WindVisualGridRows; vr++)
+        {
+            double fracRow = WindFetchGridRows <= 1 ? 0 : (double)vr / (WindVisualGridRows - 1) * (WindFetchGridRows - 1);
+            int r0 = Math.Clamp((int)Math.Floor(fracRow), 0, WindFetchGridRows - 1);
+            int r1 = Math.Min(r0 + 1, WindFetchGridRows - 1);
+            double tr = fracRow - r0;
+
+            for (int vc = 0; vc < WindVisualGridColumns; vc++)
+            {
+                double fracCol = WindFetchGridColumns <= 1 ? 0 : (double)vc / (WindVisualGridColumns - 1) * (WindFetchGridColumns - 1);
+                int c0 = Math.Clamp((int)Math.Floor(fracCol), 0, WindFetchGridColumns - 1);
+                int c1 = Math.Min(c0 + 1, WindFetchGridColumns - 1);
+                double tc = fracCol - c0;
+
+                var s00 = fetched[r0 * WindFetchGridColumns + c0];
+                var s01 = fetched[r0 * WindFetchGridColumns + c1];
+                var s10 = fetched[r1 * WindFetchGridColumns + c0];
+                var s11 = fetched[r1 * WindFetchGridColumns + c1];
+
+                var (u00, v00) = ToVector(s00);
+                var (u01, v01) = ToVector(s01);
+                var (u10, v10) = ToVector(s10);
+                var (u11, v11) = ToVector(s11);
+
+                double u0 = u00 + (u01 - u00) * tc, v0 = v00 + (v01 - v00) * tc;
+                double u1 = u10 + (u11 - u10) * tc, v1 = v10 + (v11 - v10) * tc;
+                double u = u0 + (u1 - u0) * tr, v = v0 + (v1 - v0) * tr;
+
+                var (lat, lon) = visualPoints[vr * WindVisualGridColumns + vc];
+                result.Add(FromVector(lat, lon, u, v));
+            }
+        }
+        return result;
+    }
+
+    private static (double U, double V) ToVector(WindSample s)
+    {
+        double rad = s.DirectionDeg * Math.PI / 180.0;
+        return (-s.SpeedKt * Math.Sin(rad), -s.SpeedKt * Math.Cos(rad));
+    }
+
+    private static WindSample FromVector(double lat, double lon, double u, double v)
+    {
+        double speed = Math.Sqrt(u * u + v * v);
+        double dir = (Math.Atan2(-u, -v) * 180.0 / Math.PI + 360.0) % 360.0;
+        return new WindSample(lat, lon, dir, speed);
+    }
+
+    private void ClearWindBarbs()
+    {
+        foreach (var el in _windBarbElements) SelectionOverlay.Children.Remove(el);
+        _windBarbElements.Clear();
+        _lastWindSamples = [];
+    }
+
+    private void DrawWindBarbs(IReadOnlyList<WindSample> samples)
+    {
+        ClearWindBarbs();
+        _lastWindSamples = samples;
+
+        foreach (var sample in samples)
+        {
+            var barb = BuildWindBarbVisual(sample.DirectionDeg, sample.SpeedKt);
+            PositionWindBarb(barb, sample);
+            SelectionOverlay.Children.Add(barb);
+            _windBarbElements.Add(barb);
+        }
+    }
+
+    private void RepositionWindBarbs()
+    {
+        for (int i = 0; i < _windBarbElements.Count && i < _lastWindSamples.Count; i++)
+            PositionWindBarb(_windBarbElements[i], _lastWindSamples[i]);
+    }
+
+    private void PositionWindBarb(UIElement barb, WindSample sample)
+    {
+        var (sx, sy) = MercatorToScreen(
+            GeoHelper.LonToMercatorX(sample.Longitude), GeoHelper.LatToMercatorY(sample.Latitude));
+        Canvas.SetLeft(barb, sx - WindBarbCanvasSize / 2.0);
+        Canvas.SetTop(barb, sy - WindBarbCanvasSize / 2.0);
+    }
+
+    // Smaller still than before, to suit the much denser visual grid (WindVisualGridColumns
+    // x WindVisualGridRows above) without the barbs overlapping into an unreadable mess —
+    // same proportions throughout, just scaled down further.
+    private const double WindBarbCanvasSize = 22.0;
+    private const double WindBarbShaftLength = 14.0;
+    private const double WindBarbSpacing = 2.5;
+    private const double WindBarbTickLength = 5.0;
+    private const double WindBarbStrokeThickness = 1.0;
+    private static readonly SolidColorBrush WindBarbBrush = new(System.Windows.Media.Color.FromRgb(0x22, 0x22, 0x22));
+
+    // Builds a wind barb pointing "up" (toward the direction the wind is coming FROM, at
+    // rotation 0 = north) and rotates the whole shape clockwise by directionDeg — the same
+    // compass-bearing convention already used for the aircraft marker, just without that
+    // glyph's -90° correction since this shape's rest orientation already points north.
+    //
+    // Standard symbol (matches the classic aviation wind-barb chart): calm = a small ring;
+    // each full tick = 10 kt, each half tick = 5 kt, each filled pennant = 50 kt. Ticks/pennants
+    // are stacked from the tip inward (largest units nearest the tip), each angled toward the
+    // tip like a feather rather than perpendicular to the shaft.
+    private static Canvas BuildWindBarbVisual(double directionDeg, double speedKt)
+    {
+        double c = WindBarbCanvasSize / 2.0;
+        var canvas = new Canvas { Width = WindBarbCanvasSize, Height = WindBarbCanvasSize };
+
+        int rounded = (int)(Math.Round(speedKt / 5.0) * 5);
+
+        if (rounded <= 0)
+        {
+            AddRing(canvas, c, c, 4.0);
+            AddRing(canvas, c, c, 2.0);
+            return canvas;
+        }
+
+        double tipY = c - WindBarbShaftLength;
+        canvas.Children.Add(new Line
+        {
+            X1 = c, Y1 = c, X2 = c, Y2 = tipY,
+            Stroke = WindBarbBrush, StrokeThickness = WindBarbStrokeThickness,
+        });
+
+        int pennants  = rounded / 50;
+        int remainder = rounded % 50;
+        int fullBarbs = remainder / 10;
+        int halfBarb  = (remainder % 10) >= 5 ? 1 : 0;
+
+        // y walks from the tip toward the base as each feature is placed, so larger units
+        // (pennants) land nearest the tip and the half-barb (if any) lands nearest the base —
+        // matching the standard chart convention.
+        double y = tipY;
+        for (int i = 0; i < pennants; i++)
+        {
+            canvas.Children.Add(new Polygon
+            {
+                Points = [new(c, y), new(c + WindBarbTickLength, y + WindBarbSpacing / 2.0), new(c, y + WindBarbSpacing)],
+                Fill = WindBarbBrush,
+            });
+            y += WindBarbSpacing;
+        }
+        for (int i = 0; i < fullBarbs; i++)
+        {
+            AddTick(canvas, c, y, WindBarbTickLength);
+            y += WindBarbSpacing;
+        }
+        if (halfBarb == 1)
+        {
+            AddTick(canvas, c, y, WindBarbTickLength / 2.0);
+        }
+
+        canvas.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+        canvas.RenderTransform = new RotateTransform(directionDeg);
+        return canvas;
+    }
+
+    // A tick angled toward the tip (up) and to the side, like a feather — rather than
+    // perpendicular to the shaft — matching the classic wind-barb chart look.
+    private static void AddTick(Canvas canvas, double shaftX, double y, double length)
+    {
+        canvas.Children.Add(new Line
+        {
+            X1 = shaftX, Y1 = y, X2 = shaftX + length, Y2 = y - length * 0.35,
+            Stroke = WindBarbBrush, StrokeThickness = WindBarbStrokeThickness,
+        });
+    }
+
+    private static void AddRing(Canvas canvas, double centerX, double centerY, double radius)
+    {
+        var ring = new System.Windows.Shapes.Ellipse
+        {
+            Width = radius * 2, Height = radius * 2, Stroke = WindBarbBrush, StrokeThickness = WindBarbStrokeThickness,
+        };
+        canvas.Children.Add(ring);
+        Canvas.SetLeft(ring, centerX - radius);
+        Canvas.SetTop(ring, centerY - radius);
+    }
+
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _tabPrimaryWasOpen   = PrimaryPopup.IsOpen;
@@ -247,6 +609,40 @@ public partial class MapView : UserControl
         SelectionOverlay.Children.Add(_aircraftMarker);
 
         map.Navigator.ViewportChanged += (_, _) => Dispatcher.Invoke(OnViewportChanged);
+
+        // Fixed-interval debounce timer — its Interval is never mutated. Earlier this fired
+        // the cooldown-wait by changing this same timer's Interval to the remaining cooldown
+        // and restarting it, but OnViewportChanged's own Stop()/Start() (below) inherits
+        // whatever Interval happens to be set — so once a cooldown reschedule had lengthened
+        // it, continued pan/zoom kept resetting that now-multi-second wait before it could
+        // ever fire, silently starving the update entirely. The cooldown wait now lives in
+        // its own separate timer instead, so this one always means exactly "settled 600ms".
+        _windViewportDebounceTimer = new DispatcherTimer { Interval = WindViewportDebounceInterval };
+        _windViewportDebounceTimer.Tick += async (_, _) =>
+        {
+            _windViewportDebounceTimer!.Stop();
+            if (WindToggleButton.IsChecked != true) return;
+
+            var sinceLastAutoFetch = DateTime.UtcNow - _lastWindAutoFetchUtc;
+            if (sinceLastAutoFetch < WindAutoFetchCooldown)
+            {
+                _windCooldownWaitTimer!.Interval = WindAutoFetchCooldown - sinceLastAutoFetch;
+                _windCooldownWaitTimer.Start();
+                return;
+            }
+
+            await LoadWindBarbsAsync(); // sets _lastWindAutoFetchUtc itself
+        };
+
+        // One-shot: fires exactly once, when a cooldown-deferred fetch is finally due.
+        // OnViewportChanged cancels this on any further map movement (see below), so a
+        // fetch never fires for a viewport the user has already moved away from.
+        _windCooldownWaitTimer = new DispatcherTimer();
+        _windCooldownWaitTimer.Tick += async (_, _) =>
+        {
+            _windCooldownWaitTimer!.Stop();
+            if (WindToggleButton.IsChecked == true) await LoadWindBarbsAsync();
+        };
 
         var cx = GeoHelper.LonToMercatorX(15.0);
         var cy = GeoHelper.LatToMercatorY(50.0);
@@ -525,13 +921,39 @@ public partial class MapView : UserControl
         if (_secondaryAirport != null && SecondaryPopup.IsOpen) SetPopupPosition(SecondaryPopup, _secondaryAirport);
         UpdateSelectionLinePositions();
         RepositionAircraftMarker();
+        RepositionWindBarbs();
+
+        // Keep existing barbs tracking the map smoothly during the gesture itself
+        // (RepositionWindBarbs above); once the view settles, re-sample a grid for
+        // wherever the user ended up rather than leaving stale, possibly off-view points.
+        if (WindToggleButton.IsChecked == true)
+        {
+            _windViewportDebounceTimer?.Stop();
+            _windViewportDebounceTimer?.Start();
+            // Cancel any pending cooldown-deferred fetch from an earlier settle — it would
+            // be for a viewport the user has since moved away from; the debounce timer above
+            // will decide fresh, once this new position settles, whether to fetch or wait.
+            _windCooldownWaitTimer?.Stop();
+        }
     }
 
+    // A Popup is a separate top-level window in WPF — it isn't clipped by its logical
+    // parent, so if its anchor airport pans/zooms outside the map area, it would otherwise
+    // keep floating over the sidebar instead of disappearing with the map content around it.
+    // Closing it here (rather than just letting it render out of bounds) matches how a
+    // marker-anchored popup should behave once its marker is no longer in view.
     private void SetPopupPosition(System.Windows.Controls.Primitives.Popup popup, Airport airport)
     {
         var (sx, sy) = MercatorToScreen(
             GeoHelper.LonToMercatorX(airport.Longitude),
             GeoHelper.LatToMercatorY(airport.Latitude));
+
+        if (sx < 0 || sy < 0 || sx > MapCtrl.ActualWidth || sy > MapCtrl.ActualHeight)
+        {
+            popup.IsOpen = false;
+            return;
+        }
+
         popup.HorizontalOffset = sx + 10;
         popup.VerticalOffset   = sy + 10;
     }

@@ -217,10 +217,11 @@
             <!-- Map + selection overlay stacked -->
             <Grid>
                 <mapsui:MapControl x:Name="MapCtrl"/>
-                <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False"/>
+                <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False" ClipToBounds="True"/>
 
                 <!-- Weather overlay controls (top-left corner) — deliberately not part of
-                     the filter sidebar; this toggles a map layer, not an airport filter. -->
+                     the filter sidebar; this toggles a map layer, not an airport filter.
+                     Precip and Wind share one row so they read as a single "weather" group. -->
                 <StackPanel x:Name="WeatherContainer"
                             VerticalAlignment="Top" HorizontalAlignment="Left"
                             Margin="10,10,0,0">
@@ -238,14 +239,34 @@
                                     IsEnabled="False"
                                     Padding="6,4" FontSize="12" Margin="4,0,0,0"
                                     ToolTip="Refresh to the current radar frame"/>
-                            <TextBlock x:Name="PrecipitationStatusText" VerticalAlignment="Center"
-                                       Margin="8,0,0,0" FontSize="10" Foreground="Gray"/>
+                            <Rectangle Width="1" Fill="#CCCCCC" Margin="8,2,8,2"/>
+                            <ToggleButton x:Name="WindToggleButton" Content="🎏 Wind"
+                                          Checked="WindToggle_Checked" Unchecked="WindToggle_Unchecked"
+                                          Padding="8,4" FontSize="12"/>
+                            <Button x:Name="WindRefreshButton" Content="⟳"
+                                    Click="WindRefresh_Click"
+                                    IsEnabled="False"
+                                    Padding="6,4" FontSize="12" Margin="4,0,0,0"
+                                    ToolTip="Refresh wind barbs for the current view"/>
+                            <ComboBox x:Name="WindFlightLevelCombo"
+                                      SelectionChanged="WindFlightLevelCombo_SelectionChanged"
+                                      Width="130" Margin="6,0,0,0" FontSize="12"
+                                      DisplayMemberPath="Label"/>
                         </StackPanel>
                     </Border>
+                    <StackPanel Orientation="Horizontal" Margin="4,2,0,0">
+                        <TextBlock x:Name="PrecipitationStatusText" FontSize="10" Foreground="Gray"/>
+                        <TextBlock x:Name="WindStatusText" FontSize="10" Foreground="Gray" Margin="8,0,0,0"/>
+                    </StackPanel>
                     <TextBlock x:Name="PrecipitationAttributionText" FontSize="9" Foreground="Gray" Margin="4,2,0,0"
                                Visibility="Collapsed">
                         Radar: <Hyperlink NavigateUri="https://www.rainviewer.com"
                                           RequestNavigate="Attribution_RequestNavigate">RainViewer</Hyperlink>
+                    </TextBlock>
+                    <TextBlock x:Name="WindAttributionText" FontSize="9" Foreground="Gray" Margin="4,0,0,0"
+                               Visibility="Collapsed">
+                        Wind: <Hyperlink NavigateUri="https://open-meteo.com"
+                                         RequestNavigate="Attribution_RequestNavigate">Open-Meteo</Hyperlink>
                     </TextBlock>
                 </StackPanel>
 
