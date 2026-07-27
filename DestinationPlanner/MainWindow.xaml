@@ -42,6 +42,9 @@
                 <Separator/>
                 <MenuItem Header="Update Airport _Type Data (OpenAIP)…" Click="UpdateOpenAipAirportTypes_Click"/>
                 <Separator/>
+                <MenuItem Header="Configure _AI…"           Click="ConfigureAi_Click"/>
+                <MenuItem Header="_Plan a Trip…"            Click="PlanTrip_Click"/>
+                <Separator/>
                 <MenuItem Header="E_xit"                    Click="Exit_Click"/>
             </MenuItem>
             <MenuItem Header="_Help">
@@ -51,12 +54,15 @@
             </MenuItem>
         </Menu>
 
-        <TabControl>
+        <TabControl x:Name="MainTabs">
             <TabItem Header="Map">
                 <views:MapView DataContext="{Binding Map}"/>
             </TabItem>
             <TabItem Header="Logbook">
                 <views:LogbookView DataContext="{Binding Logbook}"/>
+            </TabItem>
+            <TabItem x:Name="TripPlanTab" Header="Trip Plans">
+                <views:TripPlanView DataContext="{Binding TripPlan}"/>
             </TabItem>
         </TabControl>
 

@@ -1,0 +1,79 @@
+<Window x:Class="DestinationPlanner.Views.TripMapWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mapsui="clr-namespace:Mapsui.UI.Wpf;assembly=Mapsui.UI.Wpf"
+        Title="Trip Plan Map"
+        Width="900" Height="650"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Background="#F5F5F5" BorderBrush="#CCCCCC" BorderThickness="0,0,0,1" Padding="8,5">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="TitleText" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
+                <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                    <Rectangle Width="18" Height="3" Fill="#28A428" VerticalAlignment="Center"/>
+                    <TextBlock Text="Flown" FontSize="11" Margin="4,0,12,0" VerticalAlignment="Center"/>
+                    <Rectangle Width="18" Height="3" Fill="#DC6400" VerticalAlignment="Center"/>
+                    <TextBlock Text="Planned" FontSize="11" Margin="4,0,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Text="Click an airport, or the line between two, for details."
+                           FontSize="10" Foreground="Gray" Margin="16,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <Grid>
+            <mapsui:MapControl x:Name="MapCtrl"/>
+            <!-- Not hit-test-collapsed (unlike MapView's SelectionOverlay) — the invisible wide
+                 hit-target line paired with each visible route line needs to receive clicks.
+                 Background left unset (null, not Transparent) so empty canvas area still lets
+                 clicks/drags reach MapCtrl underneath — only the Line children hit-test. -->
+            <Canvas x:Name="RouteOverlay" ClipToBounds="True"/>
+
+            <!-- Airport info popup (click an airport marker, or one side of a leg-line click) -->
+            <Popup x:Name="PrimaryPopup"
+                   StaysOpen="True"
+                   AllowsTransparency="True"
+                   Placement="RelativePoint"
+                   PlacementTarget="{Binding ElementName=MapCtrl}">
+                <Border Background="White" BorderBrush="#1E78C8" BorderThickness="1.5"
+                        CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock x:Name="PrimaryIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,1"/>
+                        <TextBlock x:Name="PrimaryName" TextWrapping="Wrap" MaxWidth="260" FontSize="11" Margin="0,0,0,6"/>
+                        <TextBlock Text="Runways" FontSize="10" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,2"/>
+                        <StackPanel x:Name="PrimaryRunwaysList" Margin="0,0,0,6"/>
+                        <Separator Margin="0,0,0,4"/>
+                        <TextBlock x:Name="PrimaryMetar" FontSize="10" Foreground="#555"
+                                   TextWrapping="Wrap" MaxWidth="260"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+
+            <!-- Second airport's info when a leg-line is clicked (never opened by a plain
+                 single-airport marker click, matching the Map tab's Ctrl+click convention). -->
+            <Popup x:Name="SecondaryPopup"
+                   StaysOpen="True"
+                   AllowsTransparency="True"
+                   Placement="RelativePoint"
+                   PlacementTarget="{Binding ElementName=MapCtrl}">
+                <Border Background="White" BorderBrush="#DC6400" BorderThickness="1.5"
+                        CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+                    </Border.Effect>
+                    <StackPanel>
+                        <TextBlock x:Name="SecondaryIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,1"/>
+                        <TextBlock x:Name="SecondaryName" TextWrapping="Wrap" MaxWidth="260" FontSize="11" Margin="0,0,0,6"/>
+                        <TextBlock Text="Runways" FontSize="10" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,2"/>
+                        <StackPanel x:Name="SecondaryRunwaysList" Margin="0,0,0,6"/>
+                        <Separator Margin="0,0,0,4"/>
+                        <TextBlock x:Name="SecondaryMetar" FontSize="10" Foreground="#555"
+                                   TextWrapping="Wrap" MaxWidth="260"/>
+                    </StackPanel>
+                </Border>
+            </Popup>
+        </Grid>
+    </DockPanel>
+</Window>

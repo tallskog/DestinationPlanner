@@ -306,6 +306,31 @@ public partial class MainWindow : Window
         }
     }
 
+    // US41 – lets the user save/replace their Anthropic API key. Optional: the app works
+    // normally without one, and "Plan a Trip…" stays disabled until a key is configured.
+    private void ConfigureAi_Click(object sender, RoutedEventArgs e)
+    {
+        var keyDialog = new AnthropicApiKeyDialog { Owner = this };
+        if (keyDialog.ShowDialog() != true || keyDialog.ApiKey is null) return; // user cancelled
+
+        new AnthropicCredentials(keyDialog.ApiKey).Save();
+    }
+
+    // US41 – prompts for an Anthropic API key if one isn't configured yet, then switches to
+    // the Trip Plans tab. Mirrors UpdateOpenAipAirportTypes_Click's TryLoad-or-prompt pattern.
+    private void PlanTrip_Click(object sender, RoutedEventArgs e)
+    {
+        if (AnthropicCredentials.TryLoad() is null)
+        {
+            var keyDialog = new AnthropicApiKeyDialog { Owner = this };
+            if (keyDialog.ShowDialog() != true || keyDialog.ApiKey is null) return; // user cancelled
+
+            new AnthropicCredentials(keyDialog.ApiKey).Save();
+        }
+
+        TripPlanTab.IsSelected = true;
+    }
+
     private void Exit_Click(object sender, RoutedEventArgs e) => Close();
 
     private void About_Click(object sender, RoutedEventArgs e) => new AboutWindow { Owner = this }.ShowDialog();

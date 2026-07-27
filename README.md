@@ -20,6 +20,7 @@ Flights are logged automatically via SimConnect while you fly — no manual entr
 - **Precipitation radar overlay** — a **🌧 Precip** toggle in the top-left corner of the map shows current precipitation (rain, snow, sleet, or hail) via [RainViewer](https://www.rainviewer.com), no signup required; a refresh button updates it on demand — see [Weather overlay](#weather-overlay)
 - **Wind barb overlay** — a **🎏 Wind** toggle in the top-left corner of the map shows wind speed/direction as barbs at a flight level you choose (Surface up to FL390), via [Open-Meteo](https://open-meteo.com), no signup required — see [Weather overlay](#weather-overlay)
 - **About window** — **Help → About** lists every external data source the app uses (OurAirports, OpenAIP, Open-Meteo, RainViewer, Aviation Weather Center, OpenStreetMap), each linking to the provider's site
+- **AI-assisted trip planning (optional, Claude)** — describe a trip in plain English (e.g. "airports in northern Europe with a 9000ft+ runway I haven't visited") and get back a candidate airport list plus a sequenced multi-leg trip with a short narrative; requires a free Anthropic API key — see [Trip planning](#trip-planning-optional)
 
 ## Prerequisites
 
@@ -63,7 +64,7 @@ The output in `publish/` can be run on any Windows 10/11 machine without the .NE
 dotnet test DestinationPlanner.slnx
 ```
 
-Tests live in `DestinationPlanner.Tests` (xUnit) and cover pure logic and ViewModel behavior — filter logic, CSV parsing, and the OpenAIP type-mapping/pagination logic — using fakes for `IAirportDataService`/`ILogbookService`/`ISimConnectService` rather than real I/O or SimConnect. UI rendering and live SimConnect/MSFS behavior aren't covered by automated tests and should be verified manually.
+Tests live in `DestinationPlanner.Tests` (xUnit) and cover pure logic and ViewModel behavior — filter logic, CSV parsing, the OpenAIP type-mapping/pagination logic, and the AI trip-planning prompt-building/response-parsing/candidate-filtering logic — using fakes for `IAirportDataService`/`ILogbookService`/`ISimConnectService`/`IAiTripPlanningService` rather than real I/O, SimConnect, or network calls. UI rendering, live SimConnect/MSFS behavior, and the live Claude API call aren't covered by automated tests and should be verified manually.
 
 ## Airport data setup
 
@@ -141,6 +142,24 @@ To enable it:
 1. Create a free account at [openaip.net](https://www.openaip.net) (top-right corner), then open your profile icon → **API Clients** and generate an API key there.
 2. In the app: **File → Update Airport Type Data (OpenAIP)…** — the first time, you'll be prompted to paste your API key; the app saves it to `openaip.local.json` in the AppData folder (`%LocalAppData%\DestinationPlanner\`, or `%LocalAppData%\DestinationPlanner-dev\` for Debug builds) and immediately fetches and applies the classification. This file is never committed to source control. Subsequent syncs reuse the saved key without prompting again. The result is also cached locally and reapplied automatically on the next launch.
 
+## Trip planning (optional)
+
+Ask an AI ([Claude Sonnet 5](https://www.anthropic.com)) to suggest where to fly next, in plain English. This is entirely optional — without an API key configured, the rest of the app works exactly as it does today and the Trip Plans tab stays disabled.
+
+The AI never picks airports itself — that stays deterministic, reusing the same runway/region/visited-status filtering as the Map tab, so it can never suggest an airport that doesn't exist in your loaded data. The AI's job is narrower: (1) turn your free-text request into filter parameters (using a curated table of aviation region names so it never has to guess ICAO prefixes from memory), and (2) once you've reviewed the resulting candidate airport list, sequence it into an ordered multi-leg trip with a short narrative.
+
+To enable it:
+
+1. Create an API key at [console.anthropic.com](https://console.anthropic.com/settings/keys).
+2. In the app: **File → Configure AI…** — paste the key; it's saved to `anthropic.local.json` in the AppData folder, never committed to source control.
+3. Open the **Trip Plans** tab (or **File → Plan a Trip…**), describe what you're looking for, click **Generate Candidates** to see the matching airports, then **Confirm & Plan Trip** to get a sequenced itinerary. Saved trip plans persist independently of which logbook is currently open. A leg can be marked flown manually, and is also marked flown automatically as soon as a matching flight (same departure/arrival airports) is logged — including live, the moment you land it in MSFS.
+
+Candidate airports you don't want can be removed before confirming (**Remove Selected**), and a saved plan can be deleted entirely (**Delete Plan**). Each leg shows the distance between its airports in nautical miles. **View on Map** opens a small map window with every airport in the plan and a line per leg — green for legs already flown, orange for the rest. Click an airport marker there for the same info popup (ICAO, name, runways, METAR) as the Map tab, or click the line between two airports to see both of their popups at once. Click anywhere else on the map to dismiss an open popup. Selecting one or more legs in the Legs list (Ctrl/Shift-click for several) highlights those legs' lines on an already-open map window.
+
+Selecting a saved plan shows the exact query that generated it in a read-only, copyable box. **Reuse Query** copies it back into the query field so you can tweak it and generate a new plan without retyping the original request from scratch.
+
+If you ask for a per-leg distance (e.g. "legs around 200nm -50/+100"), that constraint is **not** left to the AI to eyeball — Claude only ever sees bare ICAO codes, so it has no way to actually know how far apart two airports are. Instead, the app computes real distances between your confirmed candidates and builds the route itself, guaranteeing every leg falls inside the requested window; the AI's job then shrinks to writing a title and narrative for that fixed route. A candidate that can't be reached within the distance window is simply left out of the plan (and called out in the status message) rather than forcing a leg that breaks the rule.
+
 ## Weather overlay
 
 Both weather overlays live as buttons in the top-left corner of the map — not in the filter sidebar, since they toggle map layers rather than filter airports — and both follow the same philosophy: **no automatic/background refresh.** This app is for planning a flight, not for tracking weather live. Each overlay shows a snapshot of conditions at the moment you check it (or last refreshed), and stays as-is — including through panning/zooming — until you click refresh again or toggle it off.
@@ -185,18 +204,23 @@ A `settings.json` file is created automatically in the AppData directory (`%Loca
 ```
 DestinationPlanner/
 ├── Converters/      WPF value converters (SetContainsConverter)
-├── Models/          FlightRecord, Airport, AirportType
-├── ViewModels/      MainViewModel, MapViewModel, LogbookViewModel
-├── Views/           MapView.xaml, LogbookView.xaml, LogbookSelectionDialog.xaml
-├── Services/        LogbookService, AirportDataService, SimConnectService, OpenAipDataService, OpenAipCredentials
+├── Models/          FlightRecord, Airport, AirportType, AirportFilterCriteria, TripPlan, TripQueryFilters, TripNarrative
+├── ViewModels/      MainViewModel, MapViewModel, LogbookViewModel, TripPlanViewModel, TripLegRow
+├── Views/           MapView.xaml, LogbookView.xaml, LogbookSelectionDialog.xaml, TripPlanView.xaml,
+│                    AnthropicApiKeyDialog.xaml, TripMapWindow.xaml
+├── Services/        LogbookService, AirportDataService, SimConnectService, OpenAipDataService, OpenAipCredentials,
+│                    AirportFilterService, TripCandidateService, AnthropicTripPlanningService, AnthropicCredentials,
+│                    TripRouteBuilder
 ├── Serialization/   NativeLogbookSerializer, ForeignLogbookImporter, LittleNavmapCsvImporter
 ├── Schemas/         NativeLogbook.xsd, ForeignLogbook.xsd
-└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper, AppSettings, AppSettingsService
+└── Helpers/         GeoHelper, RelayCommand, AppDataHelper, LandingRatingHelper, AppSettings, AppSettingsService,
+                     RegionLookup, TripPlanStore
 
 DestinationPlanner.Tests/
-├── Services/        AirportDataService, OpenAipDataService, OpenAipCredentials tests
-├── ViewModels/      MapViewModel filter tests
-└── Fakes/           Hand-rolled fakes for IAirportDataService, ILogbookService, ISimConnectService
+├── Services/        AirportDataService, OpenAipDataService, OpenAipCredentials, AirportFilterService,
+│                    TripCandidateService, AnthropicCredentials, AnthropicTripPlanningService, TripRouteBuilder tests
+├── ViewModels/      MapViewModel filter tests, TripPlanViewModel tests
+└── Fakes/           Hand-rolled fakes for IAirportDataService, ILogbookService, ISimConnectService, IAiTripPlanningService
 ```
 
 ## Native logbook XML format

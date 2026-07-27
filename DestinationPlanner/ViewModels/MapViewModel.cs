@@ -154,36 +154,19 @@ public class MapViewModel : ViewModelBase
     {
         if (!_airports.IsLoaded) return [];
 
-        IEnumerable<Airport> candidates;
+        IEnumerable<Airport>? candidates;
 
         if (!string.IsNullOrWhiteSpace(_filterCenterIcao) && _filterRadiusNm > 0)
         {
-            var center = _airports.GetByIcao(_filterCenterIcao.Trim());
-            if (center is null) return [];
-            double degApprox = _filterRadiusNm / 60.0;
-            candidates = _airports.GetInBounds(
-                center.Latitude  - degApprox, center.Latitude  + degApprox,
-                center.Longitude - degApprox, center.Longitude + degApprox)
-                .Where(a => GeoHelper.DistanceNm(center.Latitude, center.Longitude, a.Latitude, a.Longitude) <= _filterRadiusNm);
+            candidates = AirportFilterService.ApplyCenterRadius(_airports, _filterCenterIcao, _filterRadiusNm);
+            if (candidates is null) return [];
         }
         else
         {
             candidates = _airports.GetAll();
         }
 
-        if (RequireInstrumentApproach)
-            candidates = candidates.Where(a => a.HasInstrumentApproach);
-
-        if (RequireAtis)
-            candidates = candidates.Where(a => a.HasAtis);
-
-        int minFt = UseMeters ? GeoHelper.MetersToFeet(MinRunway) : MinRunway;
-        int maxFt = UseMeters ? GeoHelper.MetersToFeet(MaxRunway) : MaxRunway;
-
-        if (minFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= minFt);
-        if (maxFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= maxFt);
-
-        candidates = ApplyAirportTypeFilter(candidates);
+        candidates = AirportFilterService.ApplyRunwayTypeAndPrefixFilters(candidates, BuildFilterCriteria());
 
         if (!_showVisited || !_showNotVisited)
         {
@@ -195,10 +178,6 @@ public class MapViewModel : ViewModelBase
             if (!_showVisited)    candidates = candidates.Where(a => !visited.Contains(a.Icao));
             else                  candidates = candidates.Where(a =>  visited.Contains(a.Icao));
         }
-
-        var prefixes = ParseIcaoPrefixes(_icaoPrefixes);
-        if (prefixes.Count > 0)
-            candidates = candidates.Where(a => prefixes.Any(p => a.Icao.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
 
         return candidates.ToList();
     }
@@ -260,54 +239,32 @@ public class MapViewModel : ViewModelBase
     {
         if (!string.IsNullOrWhiteSpace(_filterCenterIcao) && _filterRadiusNm > 0)
         {
-            var center = _airports.GetByIcao(_filterCenterIcao.Trim());
-            if (center is null) return null;
-            candidates = candidates
-                .Where(a => GeoHelper.DistanceNm(center.Latitude, center.Longitude, a.Latitude, a.Longitude) <= _filterRadiusNm);
+            candidates = AirportFilterService.ApplyCenterRadius(candidates, _airports, _filterCenterIcao, _filterRadiusNm);
+            if (candidates is null) return null;
         }
 
-        if (RequireInstrumentApproach)
-            candidates = candidates.Where(a => a.HasInstrumentApproach);
-
-        if (RequireAtis)
-            candidates = candidates.Where(a => a.HasAtis);
-
-        int minFt = UseMeters ? GeoHelper.MetersToFeet(MinRunway) : MinRunway;
-        int maxFt = UseMeters ? GeoHelper.MetersToFeet(MaxRunway) : MaxRunway;
-
-        if (minFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= minFt);
-        if (maxFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= maxFt);
-
-        candidates = ApplyAirportTypeFilter(candidates);
-
-        var prefixes = ParseIcaoPrefixes(_icaoPrefixes);
-        if (prefixes.Count > 0)
-            candidates = candidates.Where(a => prefixes.Any(p => a.Icao.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
-
-        return candidates;
+        return AirportFilterService.ApplyRunwayTypeAndPrefixFilters(candidates, BuildFilterCriteria());
     }
 
-    // Airport-type (civil/military/heliport/private/other/unknown/unclassified) filter shared by
-    // GetAllFilteredAirports and ApplySharedFilters. All-checked (the default) is a no-op, so the
-    // app behaves exactly as before for anyone who has never synced OpenAIP data (every airport
-    // is Unclassified).
-    private IEnumerable<Airport> ApplyAirportTypeFilter(IEnumerable<Airport> candidates)
+    // Builds the shared AirportFilterCriteria from this ViewModel's bound fields, converting
+    // runway length to feet up front (UseMeters is a Map-tab display concern, not part of the
+    // shared criteria). FilterCenterIcao/FilterRadiusNm are handled separately by the two
+    // call sites above (via AirportFilterService.ApplyCenterRadius), not through this criteria.
+    private AirportFilterCriteria BuildFilterCriteria() => new()
     {
-        if (_showCivilAirports && _showMilitaryAirports && _showHeliportAirports && _showPrivateAirports
-            && _showOtherAirports && _showUnknownAirports && _showUnclassifiedAirports)
-            return candidates;
-
-        return candidates.Where(a => a.Type switch
-        {
-            AirportType.Civil => _showCivilAirports,
-            AirportType.Military => _showMilitaryAirports,
-            AirportType.Heliport => _showHeliportAirports,
-            AirportType.Private => _showPrivateAirports,
-            AirportType.Other => _showOtherAirports,
-            AirportType.Unknown => _showUnknownAirports,
-            _ => _showUnclassifiedAirports, // Unclassified
-        });
-    }
+        MinRunwayFt = UseMeters ? GeoHelper.MetersToFeet(MinRunway) : MinRunway,
+        MaxRunwayFt = UseMeters ? GeoHelper.MetersToFeet(MaxRunway) : MaxRunway,
+        RequireInstrumentApproach = RequireInstrumentApproach,
+        RequireAtis = RequireAtis,
+        IcaoPrefixes = ParseIcaoPrefixes(_icaoPrefixes),
+        ShowCivilAirports = _showCivilAirports,
+        ShowMilitaryAirports = _showMilitaryAirports,
+        ShowHeliportAirports = _showHeliportAirports,
+        ShowPrivateAirports = _showPrivateAirports,
+        ShowOtherAirports = _showOtherAirports,
+        ShowUnknownAirports = _showUnknownAirports,
+        ShowUnclassifiedAirports = _showUnclassifiedAirports,
+    };
 
     private static IReadOnlyList<string> ParseIcaoPrefixes(string raw) =>
         raw.Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries)

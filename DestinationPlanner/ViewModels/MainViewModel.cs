@@ -9,9 +9,14 @@ public class MainViewModel : ViewModelBase
 {
     public LogbookViewModel Logbook { get; }
     public MapViewModel Map { get; }
+    public TripPlanViewModel TripPlan { get; }
 
     // Exposed so MainWindow can call LoadAsync and then notify MapViewModel.
     public IAirportDataService AirportData { get; }
+
+    // The raw logbook service (as opposed to the Logbook ViewModel above) — needed by
+    // TripCandidateService (US41) for visited-airport lookups.
+    public ILogbookService LogbookData { get; }
 
     public ISimConnectService SimConnect { get; }
 
@@ -54,5 +59,14 @@ public class MainViewModel : ViewModelBase
 
         Logbook = new LogbookViewModel(logbook, settings);
         Map     = new MapViewModel(AirportData, logbook, sim, settings);
+
+        LogbookData = logbook;
+        var tripCandidates = new TripCandidateService(AirportData, LogbookData);
+        TripPlan = new TripPlanViewModel(
+            AirportData,
+            tripCandidates,
+            LogbookData,
+            isAiConfigured: () => AnthropicCredentials.TryLoad() is not null,
+            createAiService: () => new AnthropicTripPlanningService(AnthropicCredentials.TryLoad()!.ApiKey));
     }
 }
