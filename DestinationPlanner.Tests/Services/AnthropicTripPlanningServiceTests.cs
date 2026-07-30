@@ -87,6 +87,77 @@ public class AnthropicTripPlanningServiceTests
         Assert.Equal(300, result.MaxLegDistanceNm);
     }
 
+    // Confirms the airport-type flags added after US43 (surfaced when the AI query path had no
+    // way to express "no military airports" etc., unlike the manual filter panels) are actually
+    // read off the response — and that an unset flag still defaults to true (include).
+    [Fact]
+    public void ParseQueryFiltersResponse_AirportTypeFlags_AreParsed()
+    {
+        const string json = """
+            {
+              "icaoPrefixes": [],
+              "minRunwayFt": 0,
+              "maxRunwayFt": 0,
+              "filterCenterIcao": "",
+              "filterRadiusNm": 0,
+              "excludeVisited": true,
+              "startIcao": "",
+              "minLegDistanceNm": 0,
+              "maxLegDistanceNm": 0,
+              "showCivilAirports": true,
+              "showMilitaryAirports": false,
+              "showHeliportAirports": true,
+              "showPrivateAirports": true,
+              "showOtherAirports": true,
+              "showUnknownAirports": true,
+              "showUnclassifiedAirports": true,
+              "intentSummary": "civil airports, no military"
+            }
+            """;
+
+        var result = AnthropicTripPlanningService.ParseQueryFiltersResponse(json);
+
+        Assert.True(result.ShowCivilAirports);
+        Assert.False(result.ShowMilitaryAirports);
+        Assert.True(result.ShowHeliportAirports);
+    }
+
+    // A second field, alongside airport type, that was completely absent from TripQueryFilters
+    // until reported — "ILS-equipped" or "with ATIS" style requests had nowhere to land, so they
+    // were silently ignored regardless of what the AI put in intentSummary.
+    [Fact]
+    public void ParseQueryFiltersResponse_InstrumentApproachAndAtisFlags_AreParsed()
+    {
+        const string json = """
+            {
+              "icaoPrefixes": [],
+              "minRunwayFt": 0,
+              "maxRunwayFt": 0,
+              "requireInstrumentApproach": true,
+              "requireAtis": true,
+              "filterCenterIcao": "",
+              "filterRadiusNm": 0,
+              "excludeVisited": true,
+              "startIcao": "",
+              "minLegDistanceNm": 0,
+              "maxLegDistanceNm": 0,
+              "showCivilAirports": true,
+              "showMilitaryAirports": true,
+              "showHeliportAirports": true,
+              "showPrivateAirports": true,
+              "showOtherAirports": true,
+              "showUnknownAirports": true,
+              "showUnclassifiedAirports": true,
+              "intentSummary": "airports with ILS and ATIS"
+            }
+            """;
+
+        var result = AnthropicTripPlanningService.ParseQueryFiltersResponse(json);
+
+        Assert.True(result.RequireInstrumentApproach);
+        Assert.True(result.RequireAtis);
+    }
+
     [Fact]
     public void ParseQueryFiltersResponse_MalformedJson_Throws()
     {

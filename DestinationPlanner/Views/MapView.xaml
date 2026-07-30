@@ -19,8 +19,8 @@
             <!-- Pinned above the scrollable filter list so Apply/Clear stay reachable
                  without resizing the window, however many filter groups are added later. -->
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
-                <Button Content="Apply Filters" Command="{Binding ApplyFiltersCommand}" Padding="10,3"/>
-                <Button Content="Clear"         Command="{Binding ClearFiltersCommand}" Padding="10,3" Margin="6,0,0,0"/>
+                <Button Content="Apply Filters" Command="{Binding Filters.ApplyFiltersCommand}" Padding="10,3"/>
+                <Button Content="Clear"         Command="{Binding Filters.ClearFiltersCommand}" Padding="10,3" Margin="6,0,0,0"/>
             </StackPanel>
 
             <TextBlock x:Name="MapStatus" DockPanel.Dock="Bottom"
@@ -45,25 +45,25 @@
 
                     <Label Grid.Row="0" Grid.Column="0" Content="Min:" VerticalAlignment="Center"/>
                     <TextBox Grid.Row="0" Grid.Column="1" Margin="4,2"
-                             Text="{Binding MinRunway, UpdateSourceTrigger=PropertyChanged}"/>
+                             Text="{Binding Filters.MinRunway, UpdateSourceTrigger=PropertyChanged}"/>
 
                     <Label Grid.Row="1" Grid.Column="0" Content="Max:" VerticalAlignment="Center"/>
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="4,2"
-                             Text="{Binding MaxRunway, UpdateSourceTrigger=PropertyChanged}"/>
+                             Text="{Binding Filters.MaxRunway, UpdateSourceTrigger=PropertyChanged}"/>
 
                     <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
                               Content="Values in metres"
-                              IsChecked="{Binding UseMeters}"
+                              IsChecked="{Binding Filters.UseMeters}"
                               Margin="0,4,0,0"/>
                 </Grid>
             </GroupBox>
 
             <GroupBox Header="Capabilities" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
-                    <CheckBox IsChecked="{Binding RequireInstrumentApproach}" Margin="0,0,0,3">
+                    <CheckBox IsChecked="{Binding Filters.RequireInstrumentApproach}" Margin="0,0,0,3">
                         <TextBlock Text="Instrument approach (ILS)" TextWrapping="Wrap"/>
                     </CheckBox>
-                    <CheckBox IsChecked="{Binding RequireAtis}">
+                    <CheckBox IsChecked="{Binding Filters.RequireAtis}">
                         <TextBlock Text="ATIS" TextWrapping="Wrap"/>
                     </CheckBox>
                 </StackPanel>
@@ -71,13 +71,13 @@
 
             <GroupBox Header="Airport Type" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
-                    <CheckBox IsChecked="{Binding ShowCivilAirports}"        Content="Civil"        Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowMilitaryAirports}"     Content="Military"     Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowHeliportAirports}"     Content="Heliport"     Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowPrivateAirports}"      Content="Private"      Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowOtherAirports}"        Content="Other / Special-Use" Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowUnknownAirports}"      Content="Unknown"      Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowUnclassifiedAirports}" Content="Unclassified" Margin="0,0,0,5"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowCivilAirports}"        Content="Civil"        Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowMilitaryAirports}"     Content="Military"     Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowHeliportAirports}"     Content="Heliport"     Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowPrivateAirports}"      Content="Private"      Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowOtherAirports}"        Content="Other / Special-Use" Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowUnknownAirports}"      Content="Unknown"      Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowUnclassifiedAirports}" Content="Unclassified" Margin="0,0,0,5"/>
                     <TextBlock FontSize="9" Foreground="Gray" TextWrapping="Wrap">
                         Airport type data: <Hyperlink NavigateUri="https://www.openaip.net"
                                                        RequestNavigate="Attribution_RequestNavigate">openAIP</Hyperlink>
@@ -87,8 +87,8 @@
 
             <GroupBox Header="Visit Status" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
-                    <CheckBox IsChecked="{Binding ShowVisited}"    Content="Show visited airports"     Margin="0,0,0,3"/>
-                    <CheckBox IsChecked="{Binding ShowNotVisited}" Content="Show not-visited airports"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowVisited}"    Content="Show visited airports"     Margin="0,0,0,3"/>
+                    <CheckBox IsChecked="{Binding Filters.ShowNotVisited}" Content="Show not-visited airports"/>
                 </StackPanel>
             </GroupBox>
 
@@ -104,17 +104,17 @@
                     </Grid.RowDefinitions>
                     <Label Grid.Row="0" Grid.Column="0" Content="Centre:" VerticalAlignment="Center"/>
                     <TextBox Grid.Row="0" Grid.Column="1" Margin="4,2"
-                             Text="{Binding FilterCenterIcao, UpdateSourceTrigger=PropertyChanged}"
+                             Text="{Binding Filters.FilterCenterIcao, UpdateSourceTrigger=PropertyChanged}"
                              CharacterCasing="Upper"/>
                     <Label Grid.Row="1" Grid.Column="0" Content="Radius (nm):" VerticalAlignment="Center"/>
                     <TextBox Grid.Row="1" Grid.Column="1" Margin="4,2"
-                             Text="{Binding FilterRadiusNm, UpdateSourceTrigger=PropertyChanged}"/>
+                             Text="{Binding Filters.FilterRadiusNm, UpdateSourceTrigger=PropertyChanged}"/>
                 </Grid>
             </GroupBox>
 
             <GroupBox Header="ICAO Filter" Margin="0,0,0,4" Padding="6,4">
                 <StackPanel>
-                    <TextBox Text="{Binding IcaoPrefixes, UpdateSourceTrigger=PropertyChanged}"
+                    <TextBox Text="{Binding Filters.IcaoPrefixes, UpdateSourceTrigger=PropertyChanged}"
                              CharacterCasing="Upper"/>
                     <TextBlock Foreground="Gray" FontSize="10" TextWrapping="Wrap" Margin="0,3,0,0"
                                Text="Prefixes, comma-separated&#x0a;e.g. EF,ES for Finland &amp; Sweden"/>

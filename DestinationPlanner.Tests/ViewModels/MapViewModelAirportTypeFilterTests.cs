@@ -55,7 +55,7 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     public void GetAllFilteredAirports_MilitaryUnchecked_ExcludesOnlyMilitary()
     {
         var vm = CreateViewModel(out _);
-        vm.ShowMilitaryAirports = false;
+        vm.Filters.ShowMilitaryAirports = false;
 
         var result = vm.GetAllFilteredAirports();
 
@@ -67,7 +67,7 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     public void GetAllFilteredAirports_HeliportUnchecked_ExcludesOnlyHeliport()
     {
         var vm = CreateViewModel(out _);
-        vm.ShowHeliportAirports = false;
+        vm.Filters.ShowHeliportAirports = false;
 
         var result = vm.GetAllFilteredAirports();
 
@@ -79,7 +79,7 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     public void GetAllFilteredAirports_OtherUnchecked_ExcludesOnlyOther()
     {
         var vm = CreateViewModel(out _);
-        vm.ShowOtherAirports = false;
+        vm.Filters.ShowOtherAirports = false;
 
         var result = vm.GetAllFilteredAirports();
 
@@ -91,7 +91,7 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     public void GetAllFilteredAirports_UnknownUnchecked_ExcludesOnlyUnknown()
     {
         var vm = CreateViewModel(out _);
-        vm.ShowUnknownAirports = false;
+        vm.Filters.ShowUnknownAirports = false;
 
         var result = vm.GetAllFilteredAirports();
 
@@ -103,7 +103,7 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     public void GetAllFilteredAirports_UnclassifiedUnchecked_ExcludesOnlyUnclassified()
     {
         var vm = CreateViewModel(out _);
-        vm.ShowUnclassifiedAirports = false;
+        vm.Filters.ShowUnclassifiedAirports = false;
 
         var result = vm.GetAllFilteredAirports();
 
@@ -115,22 +115,22 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     public void ClearFiltersCommand_ResetsAirportTypeFiltersToAllVisible()
     {
         var vm = CreateViewModel(out _);
-        vm.ShowMilitaryAirports = false;
-        vm.ShowHeliportAirports = false;
-        vm.ShowPrivateAirports = false;
-        vm.ShowOtherAirports = false;
-        vm.ShowUnknownAirports = false;
-        vm.ShowUnclassifiedAirports = false;
+        vm.Filters.ShowMilitaryAirports = false;
+        vm.Filters.ShowHeliportAirports = false;
+        vm.Filters.ShowPrivateAirports = false;
+        vm.Filters.ShowOtherAirports = false;
+        vm.Filters.ShowUnknownAirports = false;
+        vm.Filters.ShowUnclassifiedAirports = false;
 
-        vm.ClearFiltersCommand.Execute(null);
+        vm.Filters.ClearFiltersCommand.Execute(null);
 
-        Assert.True(vm.ShowCivilAirports);
-        Assert.True(vm.ShowMilitaryAirports);
-        Assert.True(vm.ShowHeliportAirports);
-        Assert.True(vm.ShowPrivateAirports);
-        Assert.True(vm.ShowOtherAirports);
-        Assert.True(vm.ShowUnknownAirports);
-        Assert.True(vm.ShowUnclassifiedAirports);
+        Assert.True(vm.Filters.ShowCivilAirports);
+        Assert.True(vm.Filters.ShowMilitaryAirports);
+        Assert.True(vm.Filters.ShowHeliportAirports);
+        Assert.True(vm.Filters.ShowPrivateAirports);
+        Assert.True(vm.Filters.ShowOtherAirports);
+        Assert.True(vm.Filters.ShowUnknownAirports);
+        Assert.True(vm.Filters.ShowUnclassifiedAirports);
         Assert.Equal(7, vm.GetAllFilteredAirports().Count);
     }
 
@@ -144,7 +144,7 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
         logbook.SetFlights([
             new FlightRecord { DepartureIcao = "EFTU", ArrivalIcao = "EFHK" },
         ]);
-        vm.ShowMilitaryAirports = false;
+        vm.Filters.ShowMilitaryAirports = false;
 
         var result = vm.GetLogbookAirports();
 

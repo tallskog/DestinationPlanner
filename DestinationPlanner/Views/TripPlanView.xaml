@@ -11,10 +11,20 @@
                     runway I haven't visited yet".
                 </TextBlock>
                 <TextBox Text="{Binding QueryText, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,4"/>
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <Label Content="Start ICAO (optional):" VerticalAlignment="Center"/>
                     <TextBox Text="{Binding StartIcao, UpdateSourceTrigger=PropertyChanged}"
                              Width="70" CharacterCasing="Upper" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Label Content="Min leg (nm):" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MinLegNm, UpdateSourceTrigger=PropertyChanged}"
+                             Width="60" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Label Content="Max leg (nm):" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding MaxLegNm, UpdateSourceTrigger=PropertyChanged}"
+                             Width="60" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock Foreground="Gray" FontSize="10" Margin="0,0,0,4" TextWrapping="Wrap"
+                           Text="Min/Max leg (nm) apply at Confirm time regardless of how the candidate list was built, and override any leg-distance phrasing in the query above."/>
+                <StackPanel Orientation="Horizontal">
                     <Button Content="Generate Candidates" Command="{Binding GenerateCommand}" Padding="10,3" Margin="0,0,8,0"/>
                     <Button Content="Confirm &amp; Plan Trip" Command="{Binding ConfirmCommand}" Padding="10,3"/>
                 </StackPanel>
@@ -36,23 +46,181 @@
 
         <Grid>
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
+            <!-- Manual filters (US43) — same filter set as the Map tab, reused here so a
+                 candidate list can be built without writing a natural-language query. Persisted
+                 independently of the Map tab's own filters (see AppSettings' TripPlan* fields). -->
+            <DockPanel Grid.Column="0" Margin="6,6,2,6">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6">
+                    <Button Content="Add Filtered Airports" Command="{Binding AddFilteredAirportsCommand}" Padding="8,3"/>
+                    <Button Content="Clear" Command="{Binding Filters.ClearFiltersCommand}" Padding="8,3" Margin="6,0,0,0"/>
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+
+                <GroupBox Header="Runway Length" Margin="0,0,0,4" Padding="6,4">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <Label Grid.Row="0" Grid.Column="0" Content="Min:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Margin="4,2"
+                                 Text="{Binding Filters.MinRunway, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <Label Grid.Row="1" Grid.Column="0" Content="Max:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Margin="4,2"
+                                 Text="{Binding Filters.MaxRunway, UpdateSourceTrigger=PropertyChanged}"/>
+
+                        <CheckBox Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2"
+                                  Content="Values in metres"
+                                  IsChecked="{Binding Filters.UseMeters}"
+                                  Margin="0,4,0,0"/>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Capabilities" Margin="0,0,0,4" Padding="6,4">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding Filters.RequireInstrumentApproach}" Margin="0,0,0,3">
+                            <TextBlock Text="Instrument approach (ILS)" TextWrapping="Wrap"/>
+                        </CheckBox>
+                        <CheckBox IsChecked="{Binding Filters.RequireAtis}">
+                            <TextBlock Text="ATIS" TextWrapping="Wrap"/>
+                        </CheckBox>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Airport Type" Margin="0,0,0,4" Padding="6,4">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding Filters.ShowCivilAirports}"        Content="Civil"        Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowMilitaryAirports}"     Content="Military"     Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowHeliportAirports}"     Content="Heliport"     Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowPrivateAirports}"      Content="Private"      Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowOtherAirports}"        Content="Other / Special-Use" Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowUnknownAirports}"      Content="Unknown"      Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowUnclassifiedAirports}" Content="Unclassified" Margin="0,0,0,3"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Visit Status" Margin="0,0,0,4" Padding="6,4">
+                    <StackPanel>
+                        <CheckBox IsChecked="{Binding Filters.ShowVisited}"    Content="Show visited airports"     Margin="0,0,0,3"/>
+                        <CheckBox IsChecked="{Binding Filters.ShowNotVisited}" Content="Show not-visited airports"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Radius Filter" Margin="0,0,0,4" Padding="6,4">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Label Grid.Row="0" Grid.Column="0" Content="Centre:" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Margin="4,2"
+                                 Text="{Binding Filters.FilterCenterIcao, UpdateSourceTrigger=PropertyChanged}"
+                                 CharacterCasing="Upper"/>
+                        <Label Grid.Row="1" Grid.Column="0" Content="Radius (nm):" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Margin="4,2"
+                                 Text="{Binding Filters.FilterRadiusNm, UpdateSourceTrigger=PropertyChanged}"/>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="ICAO Filter" Margin="0,0,0,4" Padding="6,4">
+                    <StackPanel>
+                        <TextBox Text="{Binding Filters.IcaoPrefixes, UpdateSourceTrigger=PropertyChanged}"
+                                 CharacterCasing="Upper"/>
+                        <TextBlock Foreground="Gray" FontSize="10" TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Text="Prefixes, comma-separated&#x0a;e.g. EF,ES for Finland &amp; Sweden"/>
+                    </StackPanel>
+                </GroupBox>
+
+                </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+
             <!-- Candidates -->
-            <GroupBox Header="Candidate Airports" Grid.Column="0" Margin="6">
+            <GroupBox Header="Candidate Airports" Grid.Column="1" Margin="6">
                 <DockPanel>
-                    <Button DockPanel.Dock="Bottom" Content="Remove Selected"
-                            Command="{Binding RemoveSelectedCandidateCommand}"
-                            HorizontalAlignment="Left" Margin="0,4,0,0" Padding="8,3"/>
+                    <!-- Manual add-by-search (US43) — mirrors the Map tab's search box. -->
+                    <StackPanel x:Name="CandidateSearchContainer" DockPanel.Dock="Top" Margin="0,0,0,4">
+                        <Grid>
+                            <TextBox x:Name="CandidateSearchBox"
+                                     Text="{Binding CandidateSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     Padding="6,4" FontSize="12" VerticalContentAlignment="Center"/>
+                            <TextBlock Text="Search airport to add…"
+                                       IsHitTestVisible="False"
+                                       Foreground="#BBBBBB" FontStyle="Italic"
+                                       Margin="9,0,0,0" VerticalAlignment="Center" FontSize="12">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CandidateSearchText}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <Border x:Name="CandidateSearchDropdown"
+                                Background="White" BorderBrush="#AAAAAA" BorderThickness="1"
+                                Visibility="Collapsed" MaxHeight="160">
+                            <ListBox x:Name="CandidateSearchResultsList"
+                                     ItemsSource="{Binding CandidateSearchResults}"
+                                     BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock FontSize="11" Margin="0,2">
+                                            <Run FontWeight="SemiBold" Text="{Binding Icao, Mode=OneWay}"/>
+                                            <Run Text=" – "/>
+                                            <Run Foreground="#666666" Text="{Binding Name, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button Content="Remove Selected"
+                                Command="{Binding RemoveSelectedCandidateCommand}"
+                                Padding="8,3"/>
+                        <Button Content="View Candidates on Map" Click="ViewCandidatesOnMap_Click" Padding="8,3" Margin="8,0,0,0">
+                            <Button.Style>
+                                <Style TargetType="Button">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Candidates.Count}" Value="0">
+                                            <Setter Property="IsEnabled" Value="False"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                    </StackPanel>
                     <ListBox ItemsSource="{Binding Candidates}" SelectedItem="{Binding SelectedCandidate}"
                              DisplayMemberPath="Icao"/>
                 </DockPanel>
             </GroupBox>
 
             <!-- Saved plans + legs -->
-            <Grid Grid.Column="1" Margin="6">
+            <Grid Grid.Column="2" Margin="6">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="2*"/>

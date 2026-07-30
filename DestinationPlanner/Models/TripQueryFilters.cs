@@ -8,6 +8,8 @@ public record TripQueryFilters
     public IReadOnlyList<string> IcaoPrefixes { get; init; } = [];
     public int MinRunwayFt { get; init; }
     public int MaxRunwayFt { get; init; }
+    public bool RequireInstrumentApproach { get; init; }
+    public bool RequireAtis { get; init; }
     public string FilterCenterIcao { get; init; } = string.Empty;
     public double FilterRadiusNm { get; init; }
     public bool ExcludeVisited { get; init; } = true;
@@ -20,6 +22,19 @@ public record TripQueryFilters
     public double MinLegDistanceNm { get; init; }
     public double MaxLegDistanceNm { get; init; }
 
+    // Airport type restrictions (added after US43 surfaced that the AI query path had no way
+    // to express these at all, unlike the Map/Trip-Plans manual filter panels — e.g. "no
+    // military airports" was silently ignored, always including every type). Default true
+    // (include) for every type, matching AirportFilterCriteria's own "no restriction" defaults,
+    // so a query that doesn't mention airport type at all behaves exactly as before.
+    public bool ShowCivilAirports { get; init; } = true;
+    public bool ShowMilitaryAirports { get; init; } = true;
+    public bool ShowHeliportAirports { get; init; } = true;
+    public bool ShowPrivateAirports { get; init; } = true;
+    public bool ShowOtherAirports { get; init; } = true;
+    public bool ShowUnknownAirports { get; init; } = true;
+    public bool ShowUnclassifiedAirports { get; init; } = true;
+
     public string IntentSummary { get; init; } = string.Empty;
 
     public AirportFilterCriteria ToFilterCriteria() => new()
@@ -27,7 +42,16 @@ public record TripQueryFilters
         IcaoPrefixes = IcaoPrefixes,
         MinRunwayFt = MinRunwayFt,
         MaxRunwayFt = MaxRunwayFt,
+        RequireInstrumentApproach = RequireInstrumentApproach,
+        RequireAtis = RequireAtis,
         FilterCenterIcao = string.IsNullOrWhiteSpace(FilterCenterIcao) ? null : FilterCenterIcao,
         FilterRadiusNm = FilterRadiusNm,
+        ShowCivilAirports = ShowCivilAirports,
+        ShowMilitaryAirports = ShowMilitaryAirports,
+        ShowHeliportAirports = ShowHeliportAirports,
+        ShowPrivateAirports = ShowPrivateAirports,
+        ShowOtherAirports = ShowOtherAirports,
+        ShowUnknownAirports = ShowUnknownAirports,
+        ShowUnclassifiedAirports = ShowUnclassifiedAirports,
     };
 }

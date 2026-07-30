@@ -7,23 +7,30 @@ using System.IO;
 
 namespace DestinationPlanner.Tests.ViewModels;
 
-// IDisposable: TripPlanViewModel persists via TripPlanStore.SaveAll. Without redirecting it to
-// a throwaway file, tests would overwrite the real dev tripplans.local.json (AppDataHelper
-// resolves to the same DEBUG AppData folder used by a real dev build — see CLAUDE.md BUG-06).
+// IDisposable: TripPlanViewModel persists via TripPlanStore.SaveAll, and (as of US43) its
+// Filters (AirportFilterViewModel) persists via AppSettingsService.Save. Without redirecting
+// both to throwaway files, tests would overwrite the real dev tripplans.local.json/settings.json
+// (AppDataHelper resolves to the same DEBUG AppData folder used by a real dev build — see
+// CLAUDE.md BUG-06).
 public class TripPlanViewModelTests : IDisposable
 {
     private readonly string _tempStorePath =
         Path.Combine(Path.GetTempPath(), $"dp-test-tripplans-{Guid.NewGuid():N}.json");
+    private readonly string _tempSettingsPath =
+        Path.Combine(Path.GetTempPath(), $"dp-test-settings-{Guid.NewGuid():N}.json");
 
     public TripPlanViewModelTests()
     {
         TripPlanStore.TestOverridePath = _tempStorePath;
+        AppSettingsService.TestOverridePath = _tempSettingsPath;
     }
 
     public void Dispose()
     {
         TripPlanStore.TestOverridePath = null;
+        AppSettingsService.TestOverridePath = null;
         try { File.Delete(_tempStorePath); } catch { /* best-effort cleanup */ }
+        try { File.Delete(_tempSettingsPath); } catch { /* best-effort cleanup */ }
     }
 
     private static FakeAirportDataService CreateAirports() => new(new[]
@@ -34,14 +41,14 @@ public class TripPlanViewModelTests : IDisposable
 
     private static TripPlanViewModel CreateViewModel(
         out FakeAiTripPlanningService fakeAi, IAirportDataService? airports = null, bool aiConfigured = true,
-        ILogbookService? logbook = null)
+        ILogbookService? logbook = null, AppSettings? settings = null)
     {
         var data = airports ?? CreateAirports();
         logbook ??= new FakeLogbookService();
         var candidates = new TripCandidateService(data, logbook);
         fakeAi = new FakeAiTripPlanningService();
         var ai = fakeAi;
-        return new TripPlanViewModel(data, candidates, logbook, () => aiConfigured, () => ai);
+        return new TripPlanViewModel(data, candidates, logbook, settings ?? new AppSettings(), () => aiConfigured, () => ai);
     }
 
     [Fact]
@@ -383,6 +390,44 @@ public class TripPlanViewModelTests : IDisposable
         Assert.Contains("could not be connected", vm.StatusText);
     }
 
+    // ---- Explicit Min/Max leg (nm) fields (US43 follow-up) ----
+
+    [Fact]
+    public async Task ConfirmAsync_ExplicitMaxLegNm_UsesDeterministicRouteWithoutGenerateEverRunning()
+    {
+        var airports = CreateSpacedAirports();
+        var vm = CreateViewModel(out var fakeAi, airports);
+        // Candidates built manually (e.g. via filters/search) — GenerateAsync is never called,
+        // so _lastMinLegNm/_lastMaxLegNm stay at their default 0.
+        foreach (var a in airports.GetAll()) vm.Candidates.Add(a);
+        vm.MaxLegNm = 1000;
+
+        await vm.ConfirmAsync();
+
+        Assert.Equal(0, fakeAi.PlanTripCallCount);
+        Assert.Equal(1, fakeAi.NarrateCallCount);
+        Assert.Single(vm.SavedPlans);
+        Assert.Equal(3, vm.SavedPlans[0].Legs.Count);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_ExplicitMaxLegNm_TakesPrecedenceOverAiParsedValue()
+    {
+        var airports = CreateSpacedAirports();
+        var vm = CreateViewModel(out var fakeAi, airports);
+        vm.QueryText = "airports with legs around 5nm"; // far tighter than the ~90nm spacing
+        fakeAi.QueryFiltersToReturn = new TripQueryFilters { MinLegDistanceNm = 0, MaxLegDistanceNm = 5, IntentSummary = "test" };
+        await vm.GenerateAsync(); // parses MaxLegDistanceNm=5 into _lastMaxLegNm — would fail alone
+
+        vm.MaxLegNm = 1000; // explicit field overrides the AI-parsed 5nm bound
+
+        await vm.ConfirmAsync();
+
+        Assert.Single(vm.SavedPlans);
+        Assert.Equal(3, vm.SavedPlans[0].Legs.Count);
+        Assert.DoesNotContain("No valid route", vm.StatusText);
+    }
+
     [Fact]
     public void ReuseQueryCommand_CanExecute_FalseWhenNoPlanSelected()
     {
@@ -403,5 +448,141 @@ public class TripPlanViewModelTests : IDisposable
         vm.ReuseQueryCommand.Execute(null);
 
         Assert.Equal("airports over 9000ft in the nordics", vm.QueryText);
+    }
+
+    // ---- US43: manual filters, direct search, candidate review map ----
+
+    [Fact]
+    public void AddFilteredAirports_AddsMatchingAirportsToEmptyCandidates()
+    {
+        var vm = CreateViewModel(out _);
+        vm.Filters.MinRunway = 9000;
+
+        vm.AddFilteredAirports();
+
+        Assert.Equal(["EFHK", "ENGM"], vm.Candidates.Select(a => a.Icao).OrderBy(x => x));
+    }
+
+    [Fact]
+    public void AddFilteredAirports_MergesWithoutDuplicatingExistingCandidate()
+    {
+        var vm = CreateViewModel(out _);
+        var existing = CreateAirports().GetByIcao("EFHK")!;
+        vm.Candidates.Add(existing);
+        vm.Filters.MinRunway = 9000; // matches both EFHK and ENGM
+
+        vm.AddFilteredAirports();
+
+        Assert.Equal(2, vm.Candidates.Count);
+        Assert.Single(vm.Candidates, a => a.Icao == "EFHK");
+        Assert.Single(vm.Candidates, a => a.Icao == "ENGM");
+        Assert.Contains("1 airport(s)", vm.StatusText);
+        Assert.Contains("1 already present", vm.StatusText);
+    }
+
+    [Fact]
+    public void AddFilteredAirports_BothVisitStatusUnchecked_NoOpsWithStatusMessage()
+    {
+        var vm = CreateViewModel(out _);
+        vm.Filters.ShowVisited = false;
+        vm.Filters.ShowNotVisited = false;
+
+        vm.AddFilteredAirports();
+
+        Assert.Empty(vm.Candidates);
+        Assert.Contains("both visit-status checkboxes are unchecked", vm.StatusText);
+    }
+
+    [Fact]
+    public void AddFilteredAirports_ExcludesVisitedWhenShowVisitedUnchecked()
+    {
+        var logbook = new FakeLogbookService();
+        logbook.SetFlights([new FlightRecord { DepartureIcao = "EFHK", ArrivalIcao = "ENGM" }]);
+        var vm = CreateViewModel(out _, logbook: logbook);
+        vm.Filters.ShowVisited = false;
+
+        vm.AddFilteredAirports();
+
+        Assert.Empty(vm.Candidates); // both airports are visited (used in the one logged flight)
+    }
+
+    [Fact]
+    public void AddFilteredAirports_PersistsFilterValues()
+    {
+        var vm = CreateViewModel(out _);
+        vm.Filters.MinRunway = 7500;
+
+        vm.AddFilteredAirports();
+
+        // Re-read via a fresh AppSettings load from the same (redirected) settings path.
+        var settings = AppSettingsService.Load();
+        Assert.Equal(7500, settings.TripPlanMinRunway);
+    }
+
+    [Fact]
+    public void AddCandidateAirport_AddsNewAirport()
+    {
+        var vm = CreateViewModel(out _);
+        var airport = CreateAirports().GetByIcao("EFHK")!;
+
+        vm.AddCandidateAirport(airport);
+
+        Assert.Single(vm.Candidates);
+        Assert.Equal("EFHK", vm.Candidates[0].Icao);
+    }
+
+    [Fact]
+    public void AddCandidateAirport_SkipsDuplicateIcaoCaseInsensitive()
+    {
+        var vm = CreateViewModel(out _);
+        var airport = CreateAirports().GetByIcao("EFHK")!;
+        vm.AddCandidateAirport(airport);
+
+        vm.AddCandidateAirport(new Airport { Icao = "efhk", Name = "Duplicate", Latitude = 0, Longitude = 0 });
+
+        Assert.Single(vm.Candidates);
+    }
+
+    [Fact]
+    public void AddCandidateAirport_ClearsCandidateSearchText()
+    {
+        var vm = CreateViewModel(out _);
+        vm.CandidateSearchText = "EFH";
+        var airport = CreateAirports().GetByIcao("EFHK")!;
+
+        vm.AddCandidateAirport(airport);
+
+        Assert.Equal(string.Empty, vm.CandidateSearchText);
+    }
+
+    [Fact]
+    public void CandidateSearchResults_MatchesByIcaoPrefix()
+    {
+        var vm = CreateViewModel(out _);
+
+        vm.CandidateSearchText = "EF";
+
+        Assert.Contains(vm.CandidateSearchResults, a => a.Icao == "EFHK");
+        Assert.DoesNotContain(vm.CandidateSearchResults, a => a.Icao == "ENGM");
+    }
+
+    [Fact]
+    public void CandidateSearchResults_MatchesByNameContains()
+    {
+        var vm = CreateViewModel(out _);
+
+        vm.CandidateSearchText = "sinki";
+
+        Assert.Contains(vm.CandidateSearchResults, a => a.Icao == "EFHK");
+    }
+
+    [Fact]
+    public void CandidateSearchResults_EmptyQuery_ReturnsNoResults()
+    {
+        var vm = CreateViewModel(out _);
+
+        vm.CandidateSearchText = "";
+
+        Assert.Empty(vm.CandidateSearchResults);
     }
 }

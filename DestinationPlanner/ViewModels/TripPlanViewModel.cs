@@ -19,6 +19,7 @@ public class TripPlanViewModel : ViewModelBase
     private readonly IAirportDataService _airportData;
     private readonly ITripCandidateService _candidateService;
     private readonly ILogbookService _logbook;
+    private readonly AppSettings _settings;
     private readonly Func<bool> _isAiConfigured;
     private readonly Func<IAiTripPlanningService> _createAiService;
 
@@ -30,14 +31,27 @@ public class TripPlanViewModel : ViewModelBase
     private bool _lastExcludeVisited = true;
     private double _lastMinLegNm;
     private double _lastMaxLegNm;
+    private double _minLegNm;
+    private double _maxLegNm;
     private TripPlan? _selectedPlan;
     private TripLegRow? _selectedLeg;
     private Airport? _selectedCandidate;
+    private string _candidateSearchText = string.Empty;
+    private IReadOnlyList<Airport> _candidateSearchResults = [];
 
     public string QueryText { get => _queryText; set => SetField(ref _queryText, value); }
     public string StartIcao { get => _startIcao; set => SetField(ref _startIcao, value); }
     public string StatusText { get => _statusText; private set => SetField(ref _statusText, value); }
     public bool IsBusy { get => _isBusy; private set => SetField(ref _isBusy, value); }
+
+    // Explicit per-leg distance bounds (US43 follow-up) — independent of the free-text query,
+    // so a leg-distance constraint works reliably even when the candidate list was built
+    // manually (filters/search) and "Generate Candidates" (the only place a query's leg-distance
+    // phrasing gets AI-parsed into _lastMinLegNm/_lastMaxLegNm below) was never run, or would
+    // otherwise wipe out those manually-added candidates. 0 means "not set"; when set, these take
+    // precedence over whatever Generate last parsed from the query text (see ConfirmAsync).
+    public double MinLegNm { get => _minLegNm; set => SetField(ref _minLegNm, value); }
+    public double MaxLegNm { get => _maxLegNm; set => SetField(ref _maxLegNm, value); }
 
     // True once an Anthropic API key has been configured — the view hides/disables the
     // feature entirely when false.
@@ -60,6 +74,25 @@ public class TripPlanViewModel : ViewModelBase
     public TripLegRow? SelectedLeg { get => _selectedLeg; set => SetField(ref _selectedLeg, value); }
     public Airport? SelectedCandidate { get => _selectedCandidate; set => SetField(ref _selectedCandidate, value); }
 
+    // Shared with MapViewModel's own independent instance (US43) — see AirportFilterViewModel.
+    public AirportFilterViewModel Filters { get; }
+
+    public string CandidateSearchText
+    {
+        get => _candidateSearchText;
+        set
+        {
+            if (SetField(ref _candidateSearchText, value))
+                CandidateSearchResults = RunCandidateSearch(value);
+        }
+    }
+
+    public IReadOnlyList<Airport> CandidateSearchResults
+    {
+        get => _candidateSearchResults;
+        private set => SetField(ref _candidateSearchResults, value);
+    }
+
     public ObservableCollection<Airport> Candidates { get; } = [];
     public ObservableCollection<TripPlan> SavedPlans { get; } = [];
     public ObservableCollection<TripLegRow> SelectedPlanLegs { get; } = [];
@@ -70,19 +103,24 @@ public class TripPlanViewModel : ViewModelBase
     public ICommand RemoveSelectedCandidateCommand { get; }
     public ICommand DeleteSelectedPlanCommand { get; }
     public ICommand ReuseQueryCommand { get; }
+    public ICommand AddFilteredAirportsCommand { get; }
 
     public TripPlanViewModel(
         IAirportDataService airportData,
         ITripCandidateService candidateService,
         ILogbookService logbook,
+        AppSettings settings,
         Func<bool> isAiConfigured,
         Func<IAiTripPlanningService> createAiService)
     {
         _airportData = airportData;
         _candidateService = candidateService;
         _logbook = logbook;
+        _settings = settings;
         _isAiConfigured = isAiConfigured;
         _createAiService = createAiService;
+
+        Filters = new AirportFilterViewModel(LoadFiltersFromSettings, SaveFiltersToSettings);
 
         foreach (var plan in TripPlanStore.LoadAll())
             SavedPlans.Add(plan);
@@ -105,6 +143,7 @@ public class TripPlanViewModel : ViewModelBase
         RemoveSelectedCandidateCommand = new RelayCommand(RemoveSelectedCandidate, () => SelectedCandidate is not null);
         DeleteSelectedPlanCommand = new RelayCommand(DeleteSelectedPlan, () => SelectedPlan is not null);
         ReuseQueryCommand = new RelayCommand(ReuseQuery, () => !string.IsNullOrEmpty(SelectedPlan?.Query));
+        AddFilteredAirportsCommand = new RelayCommand(AddFilteredAirports, () => _airportData.IsLoaded);
     }
 
     private bool CanGenerate => !IsBusy && IsAiConfigured && _airportData.IsLoaded && !string.IsNullOrWhiteSpace(QueryText);
@@ -167,15 +206,22 @@ public class TripPlanViewModel : ViewModelBase
             TripPlan plan;
             string? warning = null;
 
-            if (_lastMinLegNm > 0 || _lastMaxLegNm > 0)
+            // The explicit MinLegNm/MaxLegNm fields (set directly by the user) take precedence,
+            // per field, over whatever Generate last parsed from the free-text query into
+            // _lastMinLegNm/_lastMaxLegNm — so a constraint set this way is honored even if
+            // Generate was never run (or was run before/after with different phrasing).
+            double effectiveMinNm = MinLegNm > 0 ? MinLegNm : _lastMinLegNm;
+            double effectiveMaxNm = MaxLegNm > 0 ? MaxLegNm : _lastMaxLegNm;
+
+            if (effectiveMinNm > 0 || effectiveMaxNm > 0)
             {
                 // A per-leg distance constraint was given. Trusting Claude to judge inter-airport
                 // distances from bare ICAO codes means trusting its memorized geography instead
                 // of real data — the same trap this app avoids everywhere else. Build the route
                 // deterministically from actual coordinates instead, and only ask the AI to
                 // narrate the (already fixed) result.
-                double minNm = _lastMinLegNm;
-                double maxNm = _lastMaxLegNm > 0 ? _lastMaxLegNm : double.MaxValue;
+                double minNm = effectiveMinNm;
+                double maxNm = effectiveMaxNm > 0 ? effectiveMaxNm : double.MaxValue;
                 var candidateList = Candidates.ToList();
                 var route = TripRouteBuilder.BuildRoute(candidateList, minNm, maxNm,
                     string.IsNullOrWhiteSpace(StartIcao) ? null : StartIcao);
@@ -278,6 +324,108 @@ public class TripPlanViewModel : ViewModelBase
         Candidates.Remove(SelectedCandidate);
         SelectedCandidate = null;
         CommandManager.InvalidateRequerySuggested();
+    }
+
+    // Non-AI path to building the candidate list (US43): runs the same deterministic
+    // ITripCandidateService.GetCandidates pipeline GenerateAsync uses, but merges the results
+    // into whatever's already in Candidates instead of replacing it — so filter-based additions,
+    // an AI query, and manually-searched airports can all be combined.
+    internal void AddFilteredAirports()
+    {
+        Filters.Persist();
+
+        if (!Filters.ShowVisited && !Filters.ShowNotVisited)
+        {
+            StatusText = "No airports added (both visit-status checkboxes are unchecked).";
+            return;
+        }
+
+        // TripCandidateService only supports a single "exclude visited" bool, not the Map tab's
+        // independent show-visited/show-not-visited pair. Deriving excludeVisited from
+        // !ShowVisited covers "show everything" and "hide visited"; asking for "visited only"
+        // (only ShowNotVisited unchecked) isn't representable by the shared service and falls
+        // back to "include everyone" rather than extending that service's contract for this one
+        // edge case.
+        bool excludeVisited = !Filters.ShowVisited;
+        var found = _candidateService.GetCandidates(Filters.BuildCriteria(), excludeVisited);
+
+        var existing = Candidates.Select(a => a.Icao).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int added = 0;
+        foreach (var a in found)
+            if (existing.Add(a.Icao)) { Candidates.Add(a); added++; }
+
+        StatusText = added == 0
+            ? $"No new candidates matched (found {found.Count}, all already in the list)."
+            : $"Added {added} airport(s) ({found.Count - added} already present).";
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private IReadOnlyList<Airport> RunCandidateSearch(string text)
+    {
+        if (!_airportData.IsLoaded || string.IsNullOrWhiteSpace(text)) return [];
+        var q = text.Trim();
+        return _airportData.GetAll()
+            .Where(a => a.Icao.StartsWith(q, StringComparison.OrdinalIgnoreCase)
+                     || a.Name.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(a => a.Icao.StartsWith(q, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(a => a.Icao)
+            .Take(20)
+            .ToList();
+    }
+
+    // Skips if already present (by ICAO, case-insensitive) — same merge rule as
+    // AddFilteredAirports. Internal (not private) so the View's click/Enter handlers and tests
+    // can call it directly.
+    internal void AddCandidateAirport(Airport airport)
+    {
+        if (Candidates.Any(a => string.Equals(a.Icao, airport.Icao, StringComparison.OrdinalIgnoreCase))) return;
+
+        Candidates.Add(airport);
+        CandidateSearchText = string.Empty;
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    private AirportFilterFields LoadFiltersFromSettings() => new()
+    {
+        MinRunway = _settings.TripPlanMinRunway,
+        MaxRunway = _settings.TripPlanMaxRunway,
+        UseMeters = _settings.TripPlanUseMeters,
+        RequireInstrumentApproach = _settings.TripPlanRequireInstrumentApproach,
+        RequireAtis = _settings.TripPlanRequireAtis,
+        FilterCenterIcao = _settings.TripPlanFilterCenterIcao,
+        FilterRadiusNm = _settings.TripPlanFilterRadiusNm,
+        ShowVisited = _settings.TripPlanShowVisited,
+        ShowNotVisited = _settings.TripPlanShowNotVisited,
+        ShowCivilAirports = _settings.TripPlanShowCivilAirports,
+        ShowMilitaryAirports = _settings.TripPlanShowMilitaryAirports,
+        ShowHeliportAirports = _settings.TripPlanShowHeliportAirports,
+        ShowPrivateAirports = _settings.TripPlanShowPrivateAirports,
+        ShowOtherAirports = _settings.TripPlanShowOtherAirports,
+        ShowUnknownAirports = _settings.TripPlanShowUnknownAirports,
+        ShowUnclassifiedAirports = _settings.TripPlanShowUnclassifiedAirports,
+        IcaoPrefixes = _settings.TripPlanIcaoPrefixes,
+    };
+
+    private void SaveFiltersToSettings(AirportFilterFields f)
+    {
+        _settings.TripPlanMinRunway = f.MinRunway;
+        _settings.TripPlanMaxRunway = f.MaxRunway;
+        _settings.TripPlanUseMeters = f.UseMeters;
+        _settings.TripPlanRequireInstrumentApproach = f.RequireInstrumentApproach;
+        _settings.TripPlanRequireAtis = f.RequireAtis;
+        _settings.TripPlanFilterCenterIcao = f.FilterCenterIcao;
+        _settings.TripPlanFilterRadiusNm = f.FilterRadiusNm;
+        _settings.TripPlanShowVisited = f.ShowVisited;
+        _settings.TripPlanShowNotVisited = f.ShowNotVisited;
+        _settings.TripPlanShowCivilAirports = f.ShowCivilAirports;
+        _settings.TripPlanShowMilitaryAirports = f.ShowMilitaryAirports;
+        _settings.TripPlanShowHeliportAirports = f.ShowHeliportAirports;
+        _settings.TripPlanShowPrivateAirports = f.ShowPrivateAirports;
+        _settings.TripPlanShowOtherAirports = f.ShowOtherAirports;
+        _settings.TripPlanShowUnknownAirports = f.ShowUnknownAirports;
+        _settings.TripPlanShowUnclassifiedAirports = f.ShowUnclassifiedAirports;
+        _settings.TripPlanIcaoPrefixes = f.IcaoPrefixes;
+        AppSettingsService.Save(_settings);
     }
 
     private void DeleteSelectedPlan()

@@ -553,6 +553,7 @@ public partial class MapView : UserControl
         _vm.FiltersApplied += (_, _) => Dispatcher.Invoke(() => { RefreshAirportLayer(); RefreshLogbookLayer(); });
         _vm.LogbookChanged += (_, _) => Dispatcher.Invoke(RefreshLogbookLayer);
         _vm.PropertyChanged += OnVmPropertyChanged;
+        _vm.Filters.PropertyChanged += OnVmPropertyChanged;
         _vm.AircraftMoved  += (_, e) => Dispatcher.Invoke(() => UpdateAircraftMarker(e));
         MapCtrl.Info += OnMapInfo;
 
@@ -658,7 +659,7 @@ public partial class MapView : UserControl
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MapViewModel.FilterCenterIcao) or nameof(MapViewModel.FilterRadiusNm))
+        if (e.PropertyName is nameof(AirportFilterViewModel.FilterCenterIcao) or nameof(AirportFilterViewModel.FilterRadiusNm))
             Dispatcher.Invoke(RefreshAirportLayer);
         else if (e.PropertyName == nameof(MapViewModel.SearchResults))
             Dispatcher.Invoke(UpdateSearchDropdownVisibility);

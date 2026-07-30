@@ -66,6 +66,7 @@ public class MainViewModel : ViewModelBase
             AirportData,
             tripCandidates,
             LogbookData,
+            settings,
             isAiConfigured: () => AnthropicCredentials.TryLoad() is not null,
             createAiService: () => new AnthropicTripPlanningService(AnthropicCredentials.TryLoad()!.ApiKey));
     }

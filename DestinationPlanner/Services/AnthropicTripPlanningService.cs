@@ -67,6 +67,18 @@ public sealed class AnthropicTripPlanningService : IAiTripPlanningService
             (e.g. "around 200nm -50/+100" means minLegDistanceNm=150, maxLegDistanceNm=300). If
             only an approximate figure is given with no explicit tolerance, use a +/-25% window.
 
+            Airport type flags (showCivilAirports, showMilitaryAirports, showHeliportAirports,
+            showPrivateAirports, showOtherAirports, showUnknownAirports, showUnclassifiedAirports)
+            all default to true (include). Set a specific type's flag to false only if the query
+            explicitly excludes it (e.g. "no military airports" → showMilitaryAirports=false). If
+            the query says to include *only* a given type (e.g. "civil airports only"), set every
+            other type's flag to false and leave that one true. If airport type isn't mentioned at
+            all, leave every flag at its true default.
+
+            requireInstrumentApproach: true only if the query asks for an instrument approach/ILS
+            (e.g. "with ILS", "instrument approach capable"). requireAtis: true only if the query
+            asks for ATIS availability. Both default false (no requirement) if not mentioned.
+
             User request: {userQuery}
             """;
 
@@ -174,15 +186,31 @@ public sealed class AnthropicTripPlanningService : IAiTripPlanningService
             icaoPrefixes = new { type = "array", items = new { type = "string" }, description = "ICAO prefixes chosen from the provided region table or matching the user's stated countries. Empty array if no region/country restriction is implied." },
             minRunwayFt = new { type = "integer", description = "Minimum longest-runway length in feet. 0 if not specified." },
             maxRunwayFt = new { type = "integer", description = "Maximum longest-runway length in feet. 0 if not specified." },
+            requireInstrumentApproach = new { type = "boolean", description = "True only if the query explicitly asks for an instrument approach/ILS. False otherwise." },
+            requireAtis = new { type = "boolean", description = "True only if the query explicitly asks for ATIS availability. False otherwise." },
             filterCenterIcao = new { type = "string", description = "An ICAO code to search near, for 'near X' style phrasing only. Empty string otherwise." },
             filterRadiusNm = new { type = "number", description = "Radius in nautical miles around filterCenterIcao. 0 if not applicable." },
             excludeVisited = new { type = "boolean", description = "True unless the user explicitly wants already-visited airports included." },
             startIcao = new { type = "string", description = "A stated starting airport ICAO code, if any. Empty string otherwise." },
             minLegDistanceNm = new { type = "number", description = "Minimum allowed distance in nautical miles between consecutive airports in the route. 0 if not specified." },
             maxLegDistanceNm = new { type = "number", description = "Maximum allowed distance in nautical miles between consecutive airports in the route. 0 if not specified." },
+            showCivilAirports = new { type = "boolean", description = "True unless the query explicitly excludes civil airports (or restricts to a different type only)." },
+            showMilitaryAirports = new { type = "boolean", description = "True unless the query explicitly excludes military airports (or restricts to a different type only)." },
+            showHeliportAirports = new { type = "boolean", description = "True unless the query explicitly excludes heliports (or restricts to a different type only)." },
+            showPrivateAirports = new { type = "boolean", description = "True unless the query explicitly excludes private airports (or restricts to a different type only)." },
+            showOtherAirports = new { type = "boolean", description = "True unless the query explicitly excludes other/special-use airports (or restricts to a different type only)." },
+            showUnknownAirports = new { type = "boolean", description = "True unless the query explicitly excludes unknown-type airports (or restricts to a different type only)." },
+            showUnclassifiedAirports = new { type = "boolean", description = "True unless the query explicitly excludes unclassified airports (or restricts to a different type only)." },
             intentSummary = new { type = "string", description = "A one-sentence restatement of the interpreted query, for the user to confirm." },
         }),
-        ["required"] = JsonSerializer.SerializeToElement(new[] { "icaoPrefixes", "minRunwayFt", "maxRunwayFt", "filterCenterIcao", "filterRadiusNm", "excludeVisited", "startIcao", "minLegDistanceNm", "maxLegDistanceNm", "intentSummary" }),
+        ["required"] = JsonSerializer.SerializeToElement(new[]
+        {
+            "icaoPrefixes", "minRunwayFt", "maxRunwayFt", "requireInstrumentApproach", "requireAtis",
+            "filterCenterIcao", "filterRadiusNm", "excludeVisited", "startIcao", "minLegDistanceNm",
+            "maxLegDistanceNm", "showCivilAirports", "showMilitaryAirports", "showHeliportAirports",
+            "showPrivateAirports", "showOtherAirports", "showUnknownAirports", "showUnclassifiedAirports",
+            "intentSummary",
+        }),
         ["additionalProperties"] = JsonSerializer.SerializeToElement(false),
     };
 

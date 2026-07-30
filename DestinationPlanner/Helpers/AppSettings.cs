@@ -31,4 +31,24 @@ public class AppSettings
     public bool ShowUnknownAirports { get; set; } = true;
     public bool ShowUnclassifiedAirports { get; set; } = true;
     public string IcaoPrefixes { get; set; } = string.Empty;
+
+    // Trip Plans tab filter state (US43) — persisted independently of the Map tab's filters
+    // above so each tab remembers its own last-used values.
+    public int TripPlanMinRunway { get; set; }
+    public int TripPlanMaxRunway { get; set; }
+    public bool TripPlanUseMeters { get; set; }
+    public bool TripPlanRequireInstrumentApproach { get; set; }
+    public bool TripPlanRequireAtis { get; set; }
+    public string TripPlanFilterCenterIcao { get; set; } = string.Empty;
+    public double TripPlanFilterRadiusNm { get; set; }
+    public bool TripPlanShowVisited { get; set; } = true;
+    public bool TripPlanShowNotVisited { get; set; } = true;
+    public bool TripPlanShowCivilAirports { get; set; } = true;
+    public bool TripPlanShowMilitaryAirports { get; set; } = true;
+    public bool TripPlanShowHeliportAirports { get; set; } = true;
+    public bool TripPlanShowPrivateAirports { get; set; } = true;
+    public bool TripPlanShowOtherAirports { get; set; } = true;
+    public bool TripPlanShowUnknownAirports { get; set; } = true;
+    public bool TripPlanShowUnclassifiedAirports { get; set; } = true;
+    public string TripPlanIcaoPrefixes { get; set; } = string.Empty;
 }
