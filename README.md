@@ -128,6 +128,9 @@ Click **Apply Filters** to update the map. **Clear** resets all filters to their
 ### Airport search
 A search box is shown in the top-right corner of the map. Type an ICAO code or any part of an airport name — a live dropdown updates after every keystroke. Click a result (or press Down / Enter) to zoom the map to that airport and open its info popup. Press Escape to clear the search.
 
+### Airport info boxes
+Click an airport marker to open its info box (ICAO, name, runways, METAR) with a blue border. Ctrl+click a second airport to open a second info box (orange border) alongside it, with a dashed line and the distance in nautical miles between them. Click either box and drag it to a new spot — handy when two selected airports are close together and their boxes overlap, or one is covering the distance line; a thin line keeps a moved box connected to its airport so you don't lose track of which is which. Clicking empty map area closes both boxes.
+
 ### About / data sources
 **Help → About** opens a window showing the app's version and every external data source it pulls from (OurAirports, OpenAIP, Open-Meteo, RainViewer, Aviation Weather Center, OpenStreetMap), each a clickable link to the provider's site.
 

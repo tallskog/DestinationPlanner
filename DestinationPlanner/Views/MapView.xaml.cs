@@ -11,11 +11,9 @@ using MapsuiColor = Mapsui.Styles.Color;
 using MapsuiPen   = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
 using System.ComponentModel;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -41,6 +39,27 @@ public partial class MapView : UserControl
 
     private Airport? _primaryAirport;
     private Airport? _secondaryAirport;
+
+    // Draggable info-box state (position, leader line, drag tracking) for the primary/secondary
+    // selection. A regular Canvas-hosted Border (not a WPF Popup), so it lives in the same
+    // visual tree as the rest of the map overlay and needs no special-casing for window
+    // minimize/move/tab-switch — it just follows the tree like everything else on SelectionOverlay.
+    private sealed class InfoBoxState
+    {
+        public required Border Box;
+        public required Line LeaderLine;
+        // Offset from the airport's screen point to the box's top-left corner. Null = not yet
+        // dragged, so SetBoxPosition uses DefaultBoxOffset instead of a remembered one.
+        public Vector? ManualOffset;
+        public bool Dragging;
+        public System.Windows.Point DragMouseStart;
+        public double DragStartLeft;
+        public double DragStartTop;
+    }
+
+    private static readonly Vector DefaultBoxOffset = new(10, 10);
+    private InfoBoxState _primaryBox = null!;
+    private InfoBoxState _secondaryBox = null!;
 
     private CancellationTokenSource? _primaryMetarCts;
     private CancellationTokenSource? _secondaryMetarCts;
@@ -126,32 +145,14 @@ public partial class MapView : UserControl
         innerMultiplier: 1.5,
         outerMultiplier: 2.0);
 
-    // Tracks whether each popup was open before the window was minimized
-    private bool _primaryWasOpen;
-    private bool _secondaryWasOpen;
-
-    // Tracks whether each popup was open before a tab switch
-    private bool _tabPrimaryWasOpen;
-    private bool _tabSecondaryWasOpen;
-
     // Pre-built WPF brushes used in MakeRunwayTextBlock (avoids per-call allocation)
     private static readonly SolidColorBrush RunwayForeground =
         new(System.Windows.Media.Color.FromRgb(0x44, 0x44, 0x44));
 
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
-        int X, int Y, int cx, int cy, uint uFlags);
-
-    private static readonly IntPtr HWND_NOTOPMOST = new(-2);
-    private const uint SWP_NOSIZE     = 0x0001;
-    private const uint SWP_NOMOVE     = 0x0002;
-    private const uint SWP_NOACTIVATE = 0x0010;
-
     public MapView()
     {
         InitializeComponent();
-        Loaded   += OnLoaded;
-        Unloaded += OnUnloaded;
+        Loaded += OnLoaded;
 
         WindFlightLevelCombo.ItemsSource = WindFlightLevel.Standard;
         WindFlightLevelCombo.SelectedIndex = 0;
@@ -470,7 +471,7 @@ public partial class MapView : UserControl
     private static Canvas BuildWindBarbVisual(double directionDeg, double speedKt)
     {
         double c = WindBarbCanvasSize / 2.0;
-        var canvas = new Canvas { Width = WindBarbCanvasSize, Height = WindBarbCanvasSize };
+        var canvas = new Canvas { Width = WindBarbCanvasSize, Height = WindBarbCanvasSize, IsHitTestVisible = false };
 
         int rounded = (int)(Math.Round(speedKt / 5.0) * 5);
 
@@ -543,33 +544,20 @@ public partial class MapView : UserControl
         Canvas.SetTop(ring, centerY - radius);
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e)
-    {
-        _tabPrimaryWasOpen   = PrimaryPopup.IsOpen;
-        _tabSecondaryWasOpen = SecondaryPopup.IsOpen;
-        PrimaryPopup.IsOpen   = false;
-        SecondaryPopup.IsOpen = false;
-    }
-
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_initialized)
         {
-            if (_tabPrimaryWasOpen && _primaryAirport != null)
-            {
-                SetPopupPosition(PrimaryPopup, _primaryAirport);
-                PrimaryPopup.IsOpen = true;
-            }
-            if (_tabSecondaryWasOpen && _secondaryAirport != null)
-            {
-                SetPopupPosition(SecondaryPopup, _secondaryAirport);
-                SecondaryPopup.IsOpen = true;
-            }
-            _tabPrimaryWasOpen   = false;
-            _tabSecondaryWasOpen = false;
+            // The info boxes are regular Canvas-hosted elements now (not top-level Popups),
+            // so their Visibility/position/ManualOffset survive a tab switch on their own —
+            // just refresh in case the map area was resized while this tab was hidden.
+            OnViewportChanged();
             return;
         }
         _initialized = true;
+
+        _primaryBox   = new InfoBoxState { Box = PrimaryInfoBox,   LeaderLine = PrimaryLeaderLine };
+        _secondaryBox = new InfoBoxState { Box = SecondaryInfoBox, LeaderLine = SecondaryLeaderLine };
 
         _vm = DataContext as MapViewModel;
         if (_vm is null) return;
@@ -649,9 +637,6 @@ public partial class MapView : UserControl
         map.ViewportInitialized += (_, _) =>
             map.Navigator.CenterOnAndZoomTo(new MPoint(cx, cy), 2_500_000);
 
-        PrimaryPopup.Opened   += (_, _) => RemovePopupTopmost(PrimaryPopup);
-        SecondaryPopup.Opened += (_, _) => RemovePopupTopmost(SecondaryPopup);
-
         SearchContainer.IsKeyboardFocusWithinChanged += (_, _) => UpdateSearchDropdownVisibility();
         SearchResultsList.MouseLeftButtonUp += (_, _) =>
         {
@@ -681,54 +666,6 @@ public partial class MapView : UserControl
                 SearchBox.Focus();
             }
         };
-
-        var mainWindow = Window.GetWindow(this);
-        if (mainWindow != null)
-        {
-            mainWindow.StateChanged    += OnMainWindowStateChanged;
-            mainWindow.LocationChanged += OnMainWindowLocationChanged;
-        }
-    }
-
-    private static void RemovePopupTopmost(System.Windows.Controls.Primitives.Popup popup)
-    {
-        if (PresentationSource.FromVisual(popup.Child) is HwndSource src)
-            SetWindowPos(src.Handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
-    }
-
-    private void OnMainWindowStateChanged(object? sender, EventArgs e)
-    {
-        var window = (Window)sender!;
-        if (window.WindowState == WindowState.Minimized)
-        {
-            _primaryWasOpen   = PrimaryPopup.IsOpen;
-            _secondaryWasOpen = SecondaryPopup.IsOpen;
-            PrimaryPopup.IsOpen   = false;
-            SecondaryPopup.IsOpen = false;
-        }
-        else
-        {
-            if (_primaryWasOpen)   PrimaryPopup.IsOpen   = true;
-            if (_secondaryWasOpen) SecondaryPopup.IsOpen = true;
-            _primaryWasOpen   = false;
-            _secondaryWasOpen = false;
-        }
-    }
-
-    private void OnMainWindowLocationChanged(object? sender, EventArgs e)
-    {
-        NudgePopup(PrimaryPopup);
-        NudgePopup(SecondaryPopup);
-    }
-
-    // Forces WPF to recalculate popup screen position after the host window moves.
-    // AllowsTransparency popups don't reposition automatically on window move.
-    private static void NudgePopup(System.Windows.Controls.Primitives.Popup popup)
-    {
-        if (!popup.IsOpen) return;
-        var h = popup.HorizontalOffset;
-        popup.HorizontalOffset = h + 1;
-        popup.HorizontalOffset = h;
     }
 
     private void OnVmPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -807,8 +744,8 @@ public partial class MapView : UserControl
 
         if (feature is null)
         {
-            ClosePrimaryPopup();
-            CloseSecondaryPopup();
+            ClosePrimaryBox();
+            CloseSecondaryBox();
             _primaryAirport = null;
             _secondaryAirport = null;
             UpdateSelectionLine();
@@ -824,24 +761,30 @@ public partial class MapView : UserControl
         if (isCtrl && _primaryAirport != null)
         {
             _secondaryAirport = airport;
-            OpenPopup(airport, isPrimary: false);
+            OpenInfoBox(airport, isPrimary: false);
         }
         else
         {
             // Plain left-click (or ctrl with no primary): set primary, clear secondary
             _primaryAirport = airport;
             _secondaryAirport = null;
-            CloseSecondaryPopup();
-            OpenPopup(airport, isPrimary: true);
+            CloseSecondaryBox();
+            OpenInfoBox(airport, isPrimary: true);
         }
 
         UpdateSelectionLine();
     }
 
-    // ---- Popup management ----
+    // ---- Info box management ----
 
-    private void OpenPopup(Airport airport, bool isPrimary)
+    private void OpenInfoBox(Airport airport, bool isPrimary)
     {
+        var state = isPrimary ? _primaryBox : _secondaryBox;
+        // Fresh selection starts back at the default anchor-relative spot, not wherever a
+        // previously-selected airport's box happened to be dragged to.
+        state.ManualOffset = null;
+        state.Dragging = false;
+
         if (isPrimary)
         {
             _primaryMetarCts?.Cancel();
@@ -878,9 +821,7 @@ public partial class MapView : UserControl
 
         metarBlock.Text = "METAR: Loading…";
 
-        var popup = isPrimary ? PrimaryPopup : SecondaryPopup;
-        SetPopupPosition(popup, airport);
-        popup.IsOpen = true;
+        SetBoxPosition(state, airport);
 
         var cts = isPrimary ? _primaryMetarCts! : _secondaryMetarCts!;
         _ = LoadMetarAsync(airport.Icao, metarBlock, cts.Token);
@@ -901,24 +842,34 @@ public partial class MapView : UserControl
         });
     }
 
-    private void ClosePrimaryPopup()
+    private void ClosePrimaryBox()
     {
         _primaryMetarCts?.Cancel();
-        PrimaryPopup.IsOpen = false;
+        HideBox(_primaryBox);
     }
 
-    private void CloseSecondaryPopup()
+    private void CloseSecondaryBox()
     {
         _secondaryMetarCts?.Cancel();
-        SecondaryPopup.IsOpen = false;
+        HideBox(_secondaryBox);
     }
 
-    // ---- Popup positioning ----
+    private static void HideBox(InfoBoxState state)
+    {
+        state.Box.Visibility = Visibility.Collapsed;
+        state.LeaderLine.Visibility = Visibility.Collapsed;
+        state.ManualOffset = null;
+        state.Dragging = false;
+    }
+
+    // ---- Info box positioning & dragging ----
 
     private void OnViewportChanged()
     {
-        if (_primaryAirport  != null && PrimaryPopup.IsOpen)   SetPopupPosition(PrimaryPopup,   _primaryAirport);
-        if (_secondaryAirport != null && SecondaryPopup.IsOpen) SetPopupPosition(SecondaryPopup, _secondaryAirport);
+        // Always recompute position (not gated on visibility) so a box that SetBoxPosition
+        // hid while its airport panned off-screen can reappear once it pans back into view.
+        if (_primaryAirport   != null) SetBoxPosition(_primaryBox,   _primaryAirport);
+        if (_secondaryAirport != null) SetBoxPosition(_secondaryBox, _secondaryAirport);
         UpdateSelectionLinePositions();
         RepositionAircraftMarker();
         RepositionWindBarbs();
@@ -937,25 +888,110 @@ public partial class MapView : UserControl
         }
     }
 
-    // A Popup is a separate top-level window in WPF — it isn't clipped by its logical
-    // parent, so if its anchor airport pans/zooms outside the map area, it would otherwise
-    // keep floating over the sidebar instead of disappearing with the map content around it.
-    // Closing it here (rather than just letting it render out of bounds) matches how a
-    // marker-anchored popup should behave once its marker is no longer in view.
-    private void SetPopupPosition(System.Windows.Controls.Primitives.Popup popup, Airport airport)
+    // The info box is clipped by SelectionOverlay's ClipToBounds, but a box dragged near the
+    // edge would otherwise still be positioned (just invisibly) once its anchor airport pans
+    // off-screen — hiding it here (rather than just letting it sit off-view) matches how a
+    // marker-anchored box should behave once its marker is no longer in view.
+    private void SetBoxPosition(InfoBoxState state, Airport airport)
     {
-        var (sx, sy) = MercatorToScreen(
+        var (ax, ay) = MercatorToScreen(
             GeoHelper.LonToMercatorX(airport.Longitude),
             GeoHelper.LatToMercatorY(airport.Latitude));
 
-        if (sx < 0 || sy < 0 || sx > MapCtrl.ActualWidth || sy > MapCtrl.ActualHeight)
+        if (ax < 0 || ay < 0 || ax > MapCtrl.ActualWidth || ay > MapCtrl.ActualHeight)
         {
-            popup.IsOpen = false;
+            state.Box.Visibility = Visibility.Collapsed;
+            state.LeaderLine.Visibility = Visibility.Collapsed;
             return;
         }
 
-        popup.HorizontalOffset = sx + 10;
-        popup.VerticalOffset   = sy + 10;
+        var offset = state.ManualOffset ?? DefaultBoxOffset;
+        var bx = ax + offset.X;
+        var by = ay + offset.Y;
+
+        Canvas.SetLeft(state.Box, bx);
+        Canvas.SetTop(state.Box, by);
+        state.Box.Visibility = Visibility.Visible;
+
+        if (state.ManualOffset.HasValue)
+        {
+            state.LeaderLine.X1 = ax;
+            state.LeaderLine.Y1 = ay;
+            state.LeaderLine.X2 = bx;
+            state.LeaderLine.Y2 = by;
+            state.LeaderLine.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            state.LeaderLine.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    // Drag handlers shared by both info boxes — which one is resolved from the event sender.
+    private void InfoBox_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var box = (Border)sender;
+        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
+
+        state.Dragging = true;
+        state.DragMouseStart = e.GetPosition(SelectionOverlay);
+        state.DragStartLeft = Canvas.GetLeft(box);
+        state.DragStartTop  = Canvas.GetTop(box);
+        box.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void InfoBox_MouseMove(object sender, MouseEventArgs e)
+    {
+        var box = (Border)sender;
+        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
+        if (!state.Dragging) return;
+
+        var airport = box == PrimaryInfoBox ? _primaryAirport : _secondaryAirport;
+        if (airport is null) return;
+
+        var pos = e.GetPosition(SelectionOverlay);
+        var newLeft = state.DragStartLeft + (pos.X - state.DragMouseStart.X);
+        var newTop  = state.DragStartTop  + (pos.Y - state.DragMouseStart.Y);
+
+        // Keep at least a corner of the box reachable within the map area, so a box can
+        // never be dragged somewhere the user can't get it back from.
+        var maxLeft = Math.Max(0, MapCtrl.ActualWidth  - box.ActualWidth);
+        var maxTop  = Math.Max(0, MapCtrl.ActualHeight - box.ActualHeight);
+        newLeft = Math.Clamp(newLeft, 0, maxLeft);
+        newTop  = Math.Clamp(newTop,  0, maxTop);
+
+        Canvas.SetLeft(box, newLeft);
+        Canvas.SetTop(box, newTop);
+
+        var (ax, ay) = MercatorToScreen(
+            GeoHelper.LonToMercatorX(airport.Longitude),
+            GeoHelper.LatToMercatorY(airport.Latitude));
+        state.ManualOffset = new Vector(newLeft - ax, newTop - ay);
+
+        state.LeaderLine.X1 = ax;
+        state.LeaderLine.Y1 = ay;
+        state.LeaderLine.X2 = newLeft;
+        state.LeaderLine.Y2 = newTop;
+        state.LeaderLine.Visibility = Visibility.Visible;
+    }
+
+    private void InfoBox_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var box = (Border)sender;
+        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
+        if (!state.Dragging) return;
+
+        state.Dragging = false;
+        box.ReleaseMouseCapture();
+        e.Handled = true;
+    }
+
+    private void InfoBox_LostMouseCapture(object sender, MouseEventArgs e)
+    {
+        var box = (Border)sender;
+        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
+        state.Dragging = false;
     }
 
     // Converts Mercator world coords to MapCtrl-relative screen pixel coords (no rotation).
@@ -984,18 +1020,20 @@ public partial class MapView : UserControl
 
         _selectionLine = new Line
         {
-            Stroke          = new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 180, 80, 0)),
-            StrokeThickness = 2,
-            StrokeDashArray = new DoubleCollection { 6, 3 }
+            Stroke           = new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 180, 80, 0)),
+            StrokeThickness  = 2,
+            StrokeDashArray  = new DoubleCollection { 6, 3 },
+            IsHitTestVisible = false,
         };
 
         _selectionDistLabel = new TextBlock
         {
-            Text       = $"{distNm:N0} nm",
-            FontSize   = 11,
-            Foreground = new SolidColorBrush(System.Windows.Media.Color.FromRgb(80, 40, 0)),
-            Background = new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 255, 240, 200)),
-            Padding    = new Thickness(3, 1, 3, 1)
+            Text             = $"{distNm:N0} nm",
+            FontSize         = 11,
+            Foreground       = new SolidColorBrush(System.Windows.Media.Color.FromRgb(80, 40, 0)),
+            Background       = new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 255, 240, 200)),
+            Padding          = new Thickness(3, 1, 3, 1),
+            IsHitTestVisible = false,
         };
 
         SelectionOverlay.Children.Add(_selectionLine);
@@ -1043,14 +1081,14 @@ public partial class MapView : UserControl
 
         _primaryAirport   = airport;
         _secondaryAirport = null;
-        CloseSecondaryPopup();
+        CloseSecondaryBox();
         UpdateSelectionLine();
 
         var cx = GeoHelper.LonToMercatorX(airport.Longitude);
         var cy = GeoHelper.LatToMercatorY(airport.Latitude);
         MapCtrl.Map.Navigator.CenterOnAndZoomTo(new MPoint(cx, cy), 1_700);
 
-        OpenPopup(airport, isPrimary: true);
+        OpenInfoBox(airport, isPrimary: true);
         SearchBox.Focus();
     }
 

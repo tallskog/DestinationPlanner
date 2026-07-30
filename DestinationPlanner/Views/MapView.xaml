@@ -217,7 +217,70 @@
             <!-- Map + selection overlay stacked -->
             <Grid>
                 <mapsui:MapControl x:Name="MapCtrl"/>
-                <Canvas x:Name="SelectionOverlay" IsHitTestVisible="False" ClipToBounds="True"/>
+                <!-- Deliberately no IsHitTestVisible="False" here: that would suppress hit
+                     testing for the *entire* subtree, including children explicitly marked
+                     True (proven out — a WPF ancestor's False cannot be overridden by a
+                     descendant's True). The Canvas has no Background, so its own empty area
+                     is never itself hit; every purely-decorative child below is instead
+                     marked IsHitTestVisible="False" individually so only the two draggable
+                     info boxes intercept clicks — everything else still passes clicks
+                     through to the map underneath, same as before. -->
+                <Canvas x:Name="SelectionOverlay" ClipToBounds="True">
+
+                    <!-- Leader lines: only shown once the matching info box below has been
+                         dragged away from its default anchor position, so the user never
+                         loses track of which airport a relocated box belongs to. -->
+                    <Line x:Name="PrimaryLeaderLine"   IsHitTestVisible="False" Stroke="#1E78C8" StrokeThickness="1.5" Visibility="Collapsed"/>
+                    <Line x:Name="SecondaryLeaderLine" IsHitTestVisible="False" Stroke="#DC6400" StrokeThickness="1.5" Visibility="Collapsed"/>
+
+                    <!-- Primary airport info box (left-click). Draggable. -->
+                    <Border x:Name="PrimaryInfoBox"
+                            IsHitTestVisible="True" Cursor="SizeAll"
+                            Background="White" BorderBrush="#1E78C8" BorderThickness="1.5"
+                            CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280"
+                            Visibility="Collapsed"
+                            MouseLeftButtonDown="InfoBox_MouseLeftButtonDown"
+                            MouseMove="InfoBox_MouseMove"
+                            MouseLeftButtonUp="InfoBox_MouseLeftButtonUp"
+                            LostMouseCapture="InfoBox_LostMouseCapture">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <TextBlock x:Name="PrimaryIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,1"/>
+                            <TextBlock x:Name="PrimaryName" TextWrapping="Wrap" MaxWidth="260" FontSize="11" Margin="0,0,0,6"/>
+                            <TextBlock Text="Runways" FontSize="10" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,2"/>
+                            <StackPanel x:Name="PrimaryRunwaysList" Margin="0,0,0,6"/>
+                            <Separator Margin="0,0,0,4"/>
+                            <TextBlock x:Name="PrimaryMetar" FontSize="10" Foreground="#555"
+                                       TextWrapping="Wrap" MaxWidth="260"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Secondary airport info box (Ctrl+left-click). -->
+                    <Border x:Name="SecondaryInfoBox"
+                            IsHitTestVisible="True" Cursor="SizeAll"
+                            Background="White" BorderBrush="#DC6400" BorderThickness="1.5"
+                            CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280"
+                            Visibility="Collapsed"
+                            MouseLeftButtonDown="InfoBox_MouseLeftButtonDown"
+                            MouseMove="InfoBox_MouseMove"
+                            MouseLeftButtonUp="InfoBox_MouseLeftButtonUp"
+                            LostMouseCapture="InfoBox_LostMouseCapture">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <TextBlock x:Name="SecondaryIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,1"/>
+                            <TextBlock x:Name="SecondaryName" TextWrapping="Wrap" MaxWidth="260" FontSize="11" Margin="0,0,0,6"/>
+                            <TextBlock Text="Runways" FontSize="10" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,2"/>
+                            <StackPanel x:Name="SecondaryRunwaysList" Margin="0,0,0,6"/>
+                            <Separator Margin="0,0,0,4"/>
+                            <TextBlock x:Name="SecondaryMetar" FontSize="10" Foreground="#555"
+                                       TextWrapping="Wrap" MaxWidth="260"/>
+                        </StackPanel>
+                    </Border>
+                </Canvas>
 
                 <!-- Weather overlay controls (top-left corner) — deliberately not part of
                      the filter sidebar; this toggles a map layer, not an airport filter.
@@ -323,54 +386,6 @@
             </Grid>
 
         </DockPanel>
-
-        <!-- Primary airport popup (left-click) -->
-        <Popup x:Name="PrimaryPopup"
-               Grid.Column="1"
-               StaysOpen="True"
-               AllowsTransparency="True"
-               Placement="RelativePoint"
-               PlacementTarget="{Binding ElementName=MapCtrl}">
-            <Border Background="White" BorderBrush="#1E78C8" BorderThickness="1.5"
-                    CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
-                </Border.Effect>
-                <StackPanel>
-                    <TextBlock x:Name="PrimaryIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,1"/>
-                    <TextBlock x:Name="PrimaryName" TextWrapping="Wrap" MaxWidth="260" FontSize="11" Margin="0,0,0,6"/>
-                    <TextBlock Text="Runways" FontSize="10" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,2"/>
-                    <StackPanel x:Name="PrimaryRunwaysList" Margin="0,0,0,6"/>
-                    <Separator Margin="0,0,0,4"/>
-                    <TextBlock x:Name="PrimaryMetar" FontSize="10" Foreground="#555"
-                               TextWrapping="Wrap" MaxWidth="260"/>
-                </StackPanel>
-            </Border>
-        </Popup>
-
-        <!-- Secondary airport popup (Ctrl+left-click) -->
-        <Popup x:Name="SecondaryPopup"
-               Grid.Column="1"
-               StaysOpen="True"
-               AllowsTransparency="True"
-               Placement="RelativePoint"
-               PlacementTarget="{Binding ElementName=MapCtrl}">
-            <Border Background="White" BorderBrush="#DC6400" BorderThickness="1.5"
-                    CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
-                </Border.Effect>
-                <StackPanel>
-                    <TextBlock x:Name="SecondaryIcao" FontWeight="Bold" FontSize="13" Margin="0,0,0,1"/>
-                    <TextBlock x:Name="SecondaryName" TextWrapping="Wrap" MaxWidth="260" FontSize="11" Margin="0,0,0,6"/>
-                    <TextBlock Text="Runways" FontSize="10" FontWeight="SemiBold" Foreground="#666" Margin="0,0,0,2"/>
-                    <StackPanel x:Name="SecondaryRunwaysList" Margin="0,0,0,6"/>
-                    <Separator Margin="0,0,0,4"/>
-                    <TextBlock x:Name="SecondaryMetar" FontSize="10" Foreground="#555"
-                               TextWrapping="Wrap" MaxWidth="260"/>
-                </StackPanel>
-            </Border>
-        </Popup>
 
     </Grid>
 </UserControl>
