@@ -40,26 +40,10 @@ public partial class MapView : UserControl
     private Airport? _primaryAirport;
     private Airport? _secondaryAirport;
 
-    // Draggable info-box state (position, leader line, drag tracking) for the primary/secondary
-    // selection. A regular Canvas-hosted Border (not a WPF Popup), so it lives in the same
-    // visual tree as the rest of the map overlay and needs no special-casing for window
-    // minimize/move/tab-switch — it just follows the tree like everything else on SelectionOverlay.
-    private sealed class InfoBoxState
-    {
-        public required Border Box;
-        public required Line LeaderLine;
-        // Offset from the airport's screen point to the box's top-left corner. Null = not yet
-        // dragged, so SetBoxPosition uses DefaultBoxOffset instead of a remembered one.
-        public Vector? ManualOffset;
-        public bool Dragging;
-        public System.Windows.Point DragMouseStart;
-        public double DragStartLeft;
-        public double DragStartTop;
-    }
-
-    private static readonly Vector DefaultBoxOffset = new(10, 10);
-    private InfoBoxState _primaryBox = null!;
-    private InfoBoxState _secondaryBox = null!;
+    // Draggable airport info boxes — see Helpers/DraggableInfoBox and CLAUDE.md's "Map info
+    // box parity" rule (shared with TripMapWindow's trip-plan map).
+    private DraggableInfoBox _primaryBox = null!;
+    private DraggableInfoBox _secondaryBox = null!;
 
     private CancellationTokenSource? _primaryMetarCts;
     private CancellationTokenSource? _secondaryMetarCts;
@@ -556,8 +540,12 @@ public partial class MapView : UserControl
         }
         _initialized = true;
 
-        _primaryBox   = new InfoBoxState { Box = PrimaryInfoBox,   LeaderLine = PrimaryLeaderLine };
-        _secondaryBox = new InfoBoxState { Box = SecondaryInfoBox, LeaderLine = SecondaryLeaderLine };
+        _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, SelectionOverlay,
+            () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
+            () => _primaryAirport is null ? null : AirportScreenPoint(_primaryAirport));
+        _secondaryBox = new DraggableInfoBox(SecondaryInfoBox, SecondaryLeaderLine, SelectionOverlay,
+            () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
+            () => _secondaryAirport is null ? null : AirportScreenPoint(_secondaryAirport));
 
         _vm = DataContext as MapViewModel;
         if (_vm is null) return;
@@ -779,11 +767,10 @@ public partial class MapView : UserControl
 
     private void OpenInfoBox(Airport airport, bool isPrimary)
     {
-        var state = isPrimary ? _primaryBox : _secondaryBox;
+        var box = isPrimary ? _primaryBox : _secondaryBox;
         // Fresh selection starts back at the default anchor-relative spot, not wherever a
         // previously-selected airport's box happened to be dragged to.
-        state.ManualOffset = null;
-        state.Dragging = false;
+        box.ResetOffset();
 
         if (isPrimary)
         {
@@ -821,7 +808,7 @@ public partial class MapView : UserControl
 
         metarBlock.Text = "METAR: Loading…";
 
-        SetBoxPosition(state, airport);
+        box.Reposition();
 
         var cts = isPrimary ? _primaryMetarCts! : _secondaryMetarCts!;
         _ = LoadMetarAsync(airport.Icao, metarBlock, cts.Token);
@@ -845,31 +832,25 @@ public partial class MapView : UserControl
     private void ClosePrimaryBox()
     {
         _primaryMetarCts?.Cancel();
-        HideBox(_primaryBox);
+        _primaryBox.ResetOffset();
+        _primaryBox.Hide();
     }
 
     private void CloseSecondaryBox()
     {
         _secondaryMetarCts?.Cancel();
-        HideBox(_secondaryBox);
+        _secondaryBox.ResetOffset();
+        _secondaryBox.Hide();
     }
 
-    private static void HideBox(InfoBoxState state)
-    {
-        state.Box.Visibility = Visibility.Collapsed;
-        state.LeaderLine.Visibility = Visibility.Collapsed;
-        state.ManualOffset = null;
-        state.Dragging = false;
-    }
-
-    // ---- Info box positioning & dragging ----
+    // ---- Info box positioning ----
 
     private void OnViewportChanged()
     {
-        // Always recompute position (not gated on visibility) so a box that SetBoxPosition
-        // hid while its airport panned off-screen can reappear once it pans back into view.
-        if (_primaryAirport   != null) SetBoxPosition(_primaryBox,   _primaryAirport);
-        if (_secondaryAirport != null) SetBoxPosition(_secondaryBox, _secondaryAirport);
+        // Always recompute position (not gated on visibility) so a box that Reposition() hid
+        // while its airport panned off-screen can reappear once it pans back into view.
+        _primaryBox.Reposition();
+        _secondaryBox.Reposition();
         UpdateSelectionLinePositions();
         RepositionAircraftMarker();
         RepositionWindBarbs();
@@ -888,111 +869,9 @@ public partial class MapView : UserControl
         }
     }
 
-    // The info box is clipped by SelectionOverlay's ClipToBounds, but a box dragged near the
-    // edge would otherwise still be positioned (just invisibly) once its anchor airport pans
-    // off-screen — hiding it here (rather than just letting it sit off-view) matches how a
-    // marker-anchored box should behave once its marker is no longer in view.
-    private void SetBoxPosition(InfoBoxState state, Airport airport)
-    {
-        var (ax, ay) = MercatorToScreen(
-            GeoHelper.LonToMercatorX(airport.Longitude),
-            GeoHelper.LatToMercatorY(airport.Latitude));
-
-        if (ax < 0 || ay < 0 || ax > MapCtrl.ActualWidth || ay > MapCtrl.ActualHeight)
-        {
-            state.Box.Visibility = Visibility.Collapsed;
-            state.LeaderLine.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        var offset = state.ManualOffset ?? DefaultBoxOffset;
-        var bx = ax + offset.X;
-        var by = ay + offset.Y;
-
-        Canvas.SetLeft(state.Box, bx);
-        Canvas.SetTop(state.Box, by);
-        state.Box.Visibility = Visibility.Visible;
-
-        if (state.ManualOffset.HasValue)
-        {
-            state.LeaderLine.X1 = ax;
-            state.LeaderLine.Y1 = ay;
-            state.LeaderLine.X2 = bx;
-            state.LeaderLine.Y2 = by;
-            state.LeaderLine.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            state.LeaderLine.Visibility = Visibility.Collapsed;
-        }
-    }
-
-    // Drag handlers shared by both info boxes — which one is resolved from the event sender.
-    private void InfoBox_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        var box = (Border)sender;
-        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
-
-        state.Dragging = true;
-        state.DragMouseStart = e.GetPosition(SelectionOverlay);
-        state.DragStartLeft = Canvas.GetLeft(box);
-        state.DragStartTop  = Canvas.GetTop(box);
-        box.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void InfoBox_MouseMove(object sender, MouseEventArgs e)
-    {
-        var box = (Border)sender;
-        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
-        if (!state.Dragging) return;
-
-        var airport = box == PrimaryInfoBox ? _primaryAirport : _secondaryAirport;
-        if (airport is null) return;
-
-        var pos = e.GetPosition(SelectionOverlay);
-        var newLeft = state.DragStartLeft + (pos.X - state.DragMouseStart.X);
-        var newTop  = state.DragStartTop  + (pos.Y - state.DragMouseStart.Y);
-
-        // Keep at least a corner of the box reachable within the map area, so a box can
-        // never be dragged somewhere the user can't get it back from.
-        var maxLeft = Math.Max(0, MapCtrl.ActualWidth  - box.ActualWidth);
-        var maxTop  = Math.Max(0, MapCtrl.ActualHeight - box.ActualHeight);
-        newLeft = Math.Clamp(newLeft, 0, maxLeft);
-        newTop  = Math.Clamp(newTop,  0, maxTop);
-
-        Canvas.SetLeft(box, newLeft);
-        Canvas.SetTop(box, newTop);
-
-        var (ax, ay) = MercatorToScreen(
-            GeoHelper.LonToMercatorX(airport.Longitude),
-            GeoHelper.LatToMercatorY(airport.Latitude));
-        state.ManualOffset = new Vector(newLeft - ax, newTop - ay);
-
-        state.LeaderLine.X1 = ax;
-        state.LeaderLine.Y1 = ay;
-        state.LeaderLine.X2 = newLeft;
-        state.LeaderLine.Y2 = newTop;
-        state.LeaderLine.Visibility = Visibility.Visible;
-    }
-
-    private void InfoBox_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        var box = (Border)sender;
-        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
-        if (!state.Dragging) return;
-
-        state.Dragging = false;
-        box.ReleaseMouseCapture();
-        e.Handled = true;
-    }
-
-    private void InfoBox_LostMouseCapture(object sender, MouseEventArgs e)
-    {
-        var box = (Border)sender;
-        var state = box == PrimaryInfoBox ? _primaryBox : _secondaryBox;
-        state.Dragging = false;
-    }
+    private (double X, double Y) AirportScreenPoint(Airport airport) => MercatorToScreen(
+        GeoHelper.LonToMercatorX(airport.Longitude),
+        GeoHelper.LatToMercatorY(airport.Latitude));
 
     // Converts Mercator world coords to MapCtrl-relative screen pixel coords (no rotation).
     private (double x, double y) MercatorToScreen(double mercX, double mercY)

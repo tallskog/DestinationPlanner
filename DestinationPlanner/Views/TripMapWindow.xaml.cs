@@ -10,7 +10,6 @@ using MapsuiPen = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -22,22 +21,25 @@ namespace DestinationPlanner.Views;
 // map (own MapControl/Canvas) rather than reusing MapView/MapViewModel — this window shows
 // a fixed route snapshot, none of the Map tab's filtering/live-aircraft/weather concerns apply.
 //
-// Clicking an airport marker or a leg line shows the same info popup style as the Map tab
-// (ICAO, name, runways, METAR) — a plain marker click shows just that airport (Primary popup);
-// clicking a leg's line shows both its airports at once (Primary + Secondary), since a single
-// line inherently involves two airports.
+// Clicking an airport marker or a leg line shows the same draggable info box as the Map tab
+// (ICAO, name, runways, METAR — see Helpers/DraggableInfoBox and CLAUDE.md's "Map info box
+// parity" rule) — a plain marker click shows just that airport (primary box); clicking a leg's
+// line shows both its airports at once (primary + secondary), since a single line inherently
+// involves two airports.
 public partial class TripMapWindow : Window
 {
     private readonly TripPlan _plan;
     private readonly IAirportDataService _airportData;
     private readonly IMetarService _metarService = new MetarService();
-    private readonly List<(TripLeg Leg, Airport From, Airport To, Line Visible, Line HitTarget, Line Highlight)> _routeLines = [];
+    private readonly List<(TripLeg Leg, Airport From, Airport To, Line Visible, Line HitTarget, Line Highlight, TextBlock DistanceLabel)> _routeLines = [];
 
     private MemoryLayer? _airportLayer;
     private Airport? _primaryAirport;
     private Airport? _secondaryAirport;
     private CancellationTokenSource? _primaryMetarCts;
     private CancellationTokenSource? _secondaryMetarCts;
+    private DraggableInfoBox _primaryBox = null!;
+    private DraggableInfoBox _secondaryBox = null!;
 
     private static readonly SolidColorBrush RunwayForeground = new(System.Windows.Media.Color.FromRgb(0x44, 0x44, 0x44));
 
@@ -52,24 +54,6 @@ public partial class TripMapWindow : Window
         _airportData = airportData;
         TitleText.Text = plan.Title;
         Loaded += OnLoaded;
-        LocationChanged += OnWindowLocationChanged;
-    }
-
-    // AllowsTransparency popups don't reposition automatically when their host window moves
-    // (this window is its own top-level Window, unlike MapView's embedded UserControl, but the
-    // same WPF quirk applies — see MapView.OnMainWindowLocationChanged/NudgePopup, US17.7/US17.8).
-    private void OnWindowLocationChanged(object? sender, EventArgs e)
-    {
-        NudgePopup(PrimaryPopup);
-        NudgePopup(SecondaryPopup);
-    }
-
-    private static void NudgePopup(Popup popup)
-    {
-        if (!popup.IsOpen) return;
-        var h = popup.HorizontalOffset;
-        popup.HorizontalOffset = h + 1;
-        popup.HorizontalOffset = h;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -102,6 +86,13 @@ public partial class TripMapWindow : Window
         MapCtrl.Map = map;
         MapCtrl.Info += OnMapInfo;
 
+        _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, RouteOverlay,
+            () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
+            () => _primaryAirport is null ? null : AirportScreenPoint(_primaryAirport));
+        _secondaryBox = new DraggableInfoBox(SecondaryInfoBox, SecondaryLeaderLine, RouteOverlay,
+            () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
+            () => _secondaryAirport is null ? null : AirportScreenPoint(_secondaryAirport));
+
         foreach (var leg in _plan.Legs)
         {
             if (!airportsByIcao.TryGetValue(leg.DepartureIcao, out var from)) continue;
@@ -133,6 +124,19 @@ public partial class TripMapWindow : Window
                 IsHitTestVisible = false,
             };
 
+            // Distance label at the leg's midpoint — same style as MapView's primary/secondary
+            // selection-line label, so the two windows read consistently.
+            var distNm = GeoHelper.DistanceNm(from.Latitude, from.Longitude, to.Latitude, to.Longitude);
+            var distanceLabel = new TextBlock
+            {
+                Text             = $"{distNm:N0} nm",
+                FontSize         = 11,
+                Foreground       = new SolidColorBrush(System.Windows.Media.Color.FromRgb(80, 40, 0)),
+                Background       = new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 255, 240, 200)),
+                Padding          = new Thickness(3, 1, 3, 1),
+                IsHitTestVisible = false,
+            };
+
             var legFrom = from;
             var legTo = to;
             hitTarget.MouseLeftButtonDown += (_, args) =>
@@ -160,13 +164,17 @@ public partial class TripMapWindow : Window
             RouteOverlay.Children.Add(highlight);
             RouteOverlay.Children.Add(visible);
             RouteOverlay.Children.Add(hitTarget);
-            _routeLines.Add((leg, from, to, visible, hitTarget, highlight));
+            RouteOverlay.Children.Add(distanceLabel);
+            _routeLines.Add((leg, from, to, visible, hitTarget, highlight, distanceLabel));
         }
 
         map.Navigator.ViewportChanged += (_, _) => Dispatcher.Invoke(() =>
         {
             RepositionRouteLines();
-            RepositionOpenPopups();
+            // Always recompute (not gated on visibility) so a box hidden while its airport
+            // panned off-screen can reappear once it pans back into view (BUG-08/US17.5 parity).
+            _primaryBox.Reposition();
+            _secondaryBox.Reposition();
         });
 
         if (airportsByIcao.Count > 0)
@@ -200,11 +208,10 @@ public partial class TripMapWindow : Window
         if (feature is null)
         {
             // Clicking empty map area (not on a marker, and not on/near a leg line — see the
-            // hit-target handler below) is the only way to dismiss an open popup, since a
-            // WPF Popup doesn't auto-close on an outside click the way a native context menu
-            // does. Mirrors MapView.OnMapInfo's null-feature branch.
-            ClosePopup(PrimaryPopup, ref _primaryMetarCts);
-            ClosePopup(SecondaryPopup, ref _secondaryMetarCts);
+            // hit-target handler below) is the only way to dismiss an open box, mirroring
+            // MapView.OnMapInfo's null-feature branch.
+            CloseBox(_primaryBox, ref _primaryMetarCts);
+            CloseBox(_secondaryBox, ref _secondaryMetarCts);
             _primaryAirport = null;
             _secondaryAirport = null;
             return;
@@ -223,8 +230,8 @@ public partial class TripMapWindow : Window
     {
         _primaryAirport = airport;
         _secondaryAirport = null;
-        ClosePopup(SecondaryPopup, ref _secondaryMetarCts);
-        OpenPopup(airport, isPrimary: true);
+        CloseBox(_secondaryBox, ref _secondaryMetarCts);
+        OpenInfoBox(airport, isPrimary: true);
     }
 
     // ---- Leg line clicks ----
@@ -235,8 +242,8 @@ public partial class TripMapWindow : Window
     {
         _primaryAirport = from;
         _secondaryAirport = to;
-        OpenPopup(from, isPrimary: true);
-        OpenPopup(to, isPrimary: false);
+        OpenInfoBox(from, isPrimary: true);
+        OpenInfoBox(to, isPrimary: false);
     }
 
     private static double Distance(double x1, double y1, double x2, double y2)
@@ -245,10 +252,15 @@ public partial class TripMapWindow : Window
         return Math.Sqrt(dx * dx + dy * dy);
     }
 
-    // ---- Popup management (mirrors MapView's Primary/Secondary popup pattern) ----
+    // ---- Info box management (shared behavior with MapView — see DraggableInfoBox) ----
 
-    private void OpenPopup(Airport airport, bool isPrimary)
+    private void OpenInfoBox(Airport airport, bool isPrimary)
     {
+        var box = isPrimary ? _primaryBox : _secondaryBox;
+        // Fresh selection starts back at the default anchor-relative spot, not wherever a
+        // previously-selected airport's box happened to be dragged to.
+        box.ResetOffset();
+
         if (isPrimary)
         {
             _primaryMetarCts?.Cancel();
@@ -285,18 +297,17 @@ public partial class TripMapWindow : Window
 
         metarBlock.Text = "METAR: Loading…";
 
-        var popup = isPrimary ? PrimaryPopup : SecondaryPopup;
-        SetPopupPosition(popup, airport);
-        popup.IsOpen = true;
+        box.Reposition();
 
         var cts = isPrimary ? _primaryMetarCts! : _secondaryMetarCts!;
         _ = LoadMetarAsync(airport.Icao, metarBlock, cts.Token);
     }
 
-    private static void ClosePopup(Popup popup, ref CancellationTokenSource? cts)
+    private static void CloseBox(DraggableInfoBox box, ref CancellationTokenSource? cts)
     {
         cts?.Cancel();
-        popup.IsOpen = false;
+        box.ResetOffset();
+        box.Hide();
     }
 
     private static TextBlock MakeRunwayLine(string text) =>
@@ -314,34 +325,13 @@ public partial class TripMapWindow : Window
         });
     }
 
-    // A Popup is a separate top-level window in WPF and isn't clipped by its logical parent —
-    // close it once its anchor pans/zooms outside the map area rather than let it float over
-    // nothing, matching MapView.SetPopupPosition.
-    private void SetPopupPosition(Popup popup, Airport airport)
-    {
-        var (sx, sy) = MercatorToScreen(
-            GeoHelper.LonToMercatorX(airport.Longitude),
-            GeoHelper.LatToMercatorY(airport.Latitude));
-
-        if (sx < 0 || sy < 0 || sx > MapCtrl.ActualWidth || sy > MapCtrl.ActualHeight)
-        {
-            popup.IsOpen = false;
-            return;
-        }
-
-        popup.HorizontalOffset = sx + 10;
-        popup.VerticalOffset = sy + 10;
-    }
-
-    private void RepositionOpenPopups()
-    {
-        if (_primaryAirport is not null && PrimaryPopup.IsOpen) SetPopupPosition(PrimaryPopup, _primaryAirport);
-        if (_secondaryAirport is not null && SecondaryPopup.IsOpen) SetPopupPosition(SecondaryPopup, _secondaryAirport);
-    }
+    private (double X, double Y) AirportScreenPoint(Airport airport) => MercatorToScreen(
+        GeoHelper.LonToMercatorX(airport.Longitude),
+        GeoHelper.LatToMercatorY(airport.Latitude));
 
     private void RepositionRouteLines()
     {
-        foreach (var (_, from, to, visible, hitTarget, highlight) in _routeLines)
+        foreach (var (_, from, to, visible, hitTarget, highlight, distanceLabel) in _routeLines)
         {
             var (x1, y1) = MercatorToScreen(GeoHelper.LonToMercatorX(from.Longitude), GeoHelper.LatToMercatorY(from.Latitude));
             var (x2, y2) = MercatorToScreen(GeoHelper.LonToMercatorX(to.Longitude), GeoHelper.LatToMercatorY(to.Latitude));
@@ -349,6 +339,9 @@ public partial class TripMapWindow : Window
             visible.Y1 = hitTarget.Y1 = highlight.Y1 = y1;
             visible.X2 = hitTarget.X2 = highlight.X2 = x2;
             visible.Y2 = hitTarget.Y2 = highlight.Y2 = y2;
+
+            Canvas.SetLeft(distanceLabel, (x1 + x2) / 2 - 22);
+            Canvas.SetTop(distanceLabel, (y1 + y2) / 2 - 10);
         }
     }
 
@@ -357,7 +350,7 @@ public partial class TripMapWindow : Window
     // every leg whose Order is in the set gets its halo shown, everything else's is hidden).
     public void HighlightLegs(IReadOnlySet<int> legOrders)
     {
-        foreach (var (leg, _, _, _, _, highlight) in _routeLines)
+        foreach (var (leg, _, _, _, _, highlight, _) in _routeLines)
             highlight.Visibility = legOrders.Contains(leg.Order) ? Visibility.Visible : Visibility.Collapsed;
     }
 

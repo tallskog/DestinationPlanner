@@ -238,11 +238,7 @@
                             IsHitTestVisible="True" Cursor="SizeAll"
                             Background="White" BorderBrush="#1E78C8" BorderThickness="1.5"
                             CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280"
-                            Visibility="Collapsed"
-                            MouseLeftButtonDown="InfoBox_MouseLeftButtonDown"
-                            MouseMove="InfoBox_MouseMove"
-                            MouseLeftButtonUp="InfoBox_MouseLeftButtonUp"
-                            LostMouseCapture="InfoBox_LostMouseCapture">
+                            Visibility="Collapsed">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
                         </Border.Effect>
@@ -262,11 +258,7 @@
                             IsHitTestVisible="True" Cursor="SizeAll"
                             Background="White" BorderBrush="#DC6400" BorderThickness="1.5"
                             CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280"
-                            Visibility="Collapsed"
-                            MouseLeftButtonDown="InfoBox_MouseLeftButtonDown"
-                            MouseMove="InfoBox_MouseMove"
-                            MouseLeftButtonUp="InfoBox_MouseLeftButtonUp"
-                            LostMouseCapture="InfoBox_LostMouseCapture">
+                            Visibility="Collapsed">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
                         </Border.Effect>

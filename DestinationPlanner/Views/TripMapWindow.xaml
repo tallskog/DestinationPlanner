@@ -22,20 +22,28 @@
 
         <Grid>
             <mapsui:MapControl x:Name="MapCtrl"/>
-            <!-- Not hit-test-collapsed (unlike MapView's SelectionOverlay) — the invisible wide
-                 hit-target line paired with each visible route line needs to receive clicks.
-                 Background left unset (null, not Transparent) so empty canvas area still lets
-                 clicks/drags reach MapCtrl underneath — only the Line children hit-test. -->
-            <Canvas x:Name="RouteOverlay" ClipToBounds="True"/>
+            <!-- Not hit-test-collapsed (unlike MapView's SelectionOverlay pre-BUG-12 fix) — the
+                 invisible wide hit-target line paired with each visible route line, and the two
+                 draggable info boxes below, need to receive clicks. Background left unset (null,
+                 not Transparent) so empty canvas area still lets clicks/drags reach MapCtrl
+                 underneath — only explicitly hit-testable children (the hit-target lines, the
+                 info boxes) actually intercept anything; every other child here is explicitly
+                 IsHitTestVisible="False". See CLAUDE.md's "Map info box parity" rule and
+                 requirements.md's BUG-12 for why this can't rely on a Canvas-level flag instead. -->
+            <Canvas x:Name="RouteOverlay" ClipToBounds="True">
 
-            <!-- Airport info popup (click an airport marker, or one side of a leg-line click) -->
-            <Popup x:Name="PrimaryPopup"
-                   StaysOpen="True"
-                   AllowsTransparency="True"
-                   Placement="RelativePoint"
-                   PlacementTarget="{Binding ElementName=MapCtrl}">
-                <Border Background="White" BorderBrush="#1E78C8" BorderThickness="1.5"
-                        CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280">
+                <!-- Leader lines: only shown once the matching info box below has been dragged
+                     away from its default anchor position (mirrors MapView's SelectionOverlay). -->
+                <Line x:Name="PrimaryLeaderLine"   IsHitTestVisible="False" Stroke="#1E78C8" StrokeThickness="1.5" Visibility="Collapsed"/>
+                <Line x:Name="SecondaryLeaderLine" IsHitTestVisible="False" Stroke="#DC6400" StrokeThickness="1.5" Visibility="Collapsed"/>
+
+                <!-- Airport info box (click an airport marker, or one side of a leg-line click).
+                     Draggable — see DraggableInfoBox / MapView's PrimaryInfoBox for the pattern. -->
+                <Border x:Name="PrimaryInfoBox"
+                        IsHitTestVisible="True" Cursor="SizeAll"
+                        Background="White" BorderBrush="#1E78C8" BorderThickness="1.5"
+                        CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280"
+                        Visibility="Collapsed">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
                     </Border.Effect>
@@ -49,17 +57,14 @@
                                    TextWrapping="Wrap" MaxWidth="260"/>
                     </StackPanel>
                 </Border>
-            </Popup>
 
-            <!-- Second airport's info when a leg-line is clicked (never opened by a plain
-                 single-airport marker click, matching the Map tab's Ctrl+click convention). -->
-            <Popup x:Name="SecondaryPopup"
-                   StaysOpen="True"
-                   AllowsTransparency="True"
-                   Placement="RelativePoint"
-                   PlacementTarget="{Binding ElementName=MapCtrl}">
-                <Border Background="White" BorderBrush="#DC6400" BorderThickness="1.5"
-                        CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280">
+                <!-- Second airport's info when a leg-line is clicked (never opened by a plain
+                     single-airport marker click, matching the Map tab's Ctrl+click convention). -->
+                <Border x:Name="SecondaryInfoBox"
+                        IsHitTestVisible="True" Cursor="SizeAll"
+                        Background="White" BorderBrush="#DC6400" BorderThickness="1.5"
+                        CornerRadius="3" Padding="10,7" MinWidth="160" MaxWidth="280"
+                        Visibility="Collapsed">
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.25"/>
                     </Border.Effect>
@@ -73,7 +78,7 @@
                                    TextWrapping="Wrap" MaxWidth="260"/>
                     </StackPanel>
                 </Border>
-            </Popup>
+            </Canvas>
         </Grid>
     </DockPanel>
 </Window>
