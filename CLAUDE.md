@@ -41,6 +41,9 @@ This keeps dev and installed-release logbooks completely separate.
 ## README.md
 - `README.md` (repo root) must be checked and updated if needed every time when implementing a change
 
+## Committing
+- When the user explicitly asks to commit (e.g. "commit the code", "commit this"), just create the commit directly — no need to ask for confirmation first. The request to commit already is the authorization, same as "push" below already is for the push sequence. This still follows the general git safety rules (new commit, not amend; no `--no-verify`; only files relevant to the change get staged, never a blanket `git add -A`).
+
 ## Versioning
 - `DestinationPlanner/DestinationPlanner.csproj`'s `<Version>` must match the latest git tag (tag `vX.Y.Z` → `<Version>X.Y.Z</Version>`, no leading `v`).
 - When asked to tag a release (e.g. "tag this as vX.Y.Z"), update `<Version>` and commit that change *before* creating the tag, so the tagged commit already carries the matching version — don't tag first and fix the csproj after.
