@@ -77,6 +77,8 @@
                 <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                     <MenuItem Header="Edit..." Command="{Binding EditFlightCommand}"/>
                     <MenuItem Header="Delete" Command="{Binding DeleteFlightCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="Show on Map" Click="ShowOnMap_Click"/>
                 </ContextMenu>
             </DataGrid.ContextMenu>
             <DataGrid.Columns>

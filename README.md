@@ -112,6 +112,8 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
   
   Duplicates are filtered automatically. The file format is detected from the extension. Newly added flights are highlighted in light green; click **Clear Filters** to remove the highlight.
 
+Right-click a flight for **Edit...**, **Delete**, or **Show on Map** — the latter opens a popup map with both airports, a line between them, and the leg distance.
+
 ### Map filters
 | Filter | Description |
 |---|---|
