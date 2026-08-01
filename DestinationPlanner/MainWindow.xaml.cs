@@ -335,5 +335,11 @@ public partial class MainWindow : Window
 
     private void About_Click(object sender, RoutedEventArgs e) => new AboutWindow { Owner = this }.ShowDialog();
 
+    private void Statistics_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        new StatisticsWindow(vm.LogbookData.Flights, vm.AirportData) { Owner = this }.ShowDialog();
+    }
+
     private static string? NullIfMissing(string path) => File.Exists(path) ? path : null;
 }
