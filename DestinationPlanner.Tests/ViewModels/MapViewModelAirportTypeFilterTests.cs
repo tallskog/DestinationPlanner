@@ -64,6 +64,18 @@ public class MapViewModelAirportTypeFilterTests : IDisposable
     }
 
     [Fact]
+    public void GetAllFilteredAirports_ExactIcaoCode_OverridesOtherFilters()
+    {
+        var vm = CreateViewModel(out _);
+        vm.Filters.ShowMilitaryAirports = false; // would normally exclude EFTU
+        vm.Filters.IcaoPrefixes = "EFTU";
+
+        var result = vm.GetAllFilteredAirports();
+
+        Assert.Contains(result, a => a.Icao == "EFTU");
+    }
+
+    [Fact]
     public void GetAllFilteredAirports_HeliportUnchecked_ExcludesOnlyHeliport()
     {
         var vm = CreateViewModel(out _);

@@ -117,6 +117,7 @@ public class MapViewModel : ViewModelBase
     {
         if (!_airports.IsLoaded) return [];
 
+        var criteria = Filters.BuildCriteria();
         IEnumerable<Airport>? candidates;
 
         if (!string.IsNullOrWhiteSpace(Filters.FilterCenterIcao) && Filters.FilterRadiusNm > 0)
@@ -129,7 +130,7 @@ public class MapViewModel : ViewModelBase
             candidates = _airports.GetAll();
         }
 
-        candidates = AirportFilterService.ApplyRunwayTypeAndPrefixFilters(candidates, Filters.BuildCriteria());
+        candidates = AirportFilterService.ApplyRunwayTypeAndPrefixFilters(candidates, criteria);
 
         if (!Filters.ShowVisited || !Filters.ShowNotVisited)
         {
@@ -137,12 +138,13 @@ public class MapViewModel : ViewModelBase
                 .SelectMany(f => new[] { f.DepartureIcao, f.ArrivalIcao })
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-            if (!Filters.ShowVisited && !Filters.ShowNotVisited) return [];
-            if (!Filters.ShowVisited) candidates = candidates.Where(a => !visited.Contains(a.Icao));
-            else                      candidates = candidates.Where(a =>  visited.Contains(a.Icao));
+            if (!Filters.ShowVisited && !Filters.ShowNotVisited) candidates = [];
+            else if (!Filters.ShowVisited) candidates = candidates.Where(a => !visited.Contains(a.Icao));
+            else                           candidates = candidates.Where(a =>  visited.Contains(a.Icao));
         }
 
-        return candidates.ToList();
+        var overrides = AirportFilterService.ResolveIcaoOverrides(_airports, criteria.IcaoPrefixes);
+        return candidates.UnionBy(overrides, a => a.Icao, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     // Airports in the logbook — looked up by ICAO for lat/lon.

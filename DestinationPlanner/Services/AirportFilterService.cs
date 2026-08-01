@@ -53,6 +53,17 @@ public static class AirportFilterService
         return candidates;
     }
 
+    // A 4-character IcaoPrefixes entry names one specific airport rather than narrowing a
+    // region — every ICAO ident in this dataset is exactly 4 characters, so this is an
+    // unambiguous signal. Callers union this in AFTER their normal filter pipeline (runway,
+    // ILS/ATIS, airport-type, region-prefix, visited-status/exclude-visited) so an airport the
+    // user named explicitly always appears, regardless of what else is filtered (US45).
+    public static IEnumerable<Airport> ResolveIcaoOverrides(IAirportDataService airports, IReadOnlyList<string> icaoPrefixes) =>
+        icaoPrefixes
+            .Where(p => p.Length == 4)
+            .Select(code => airports.GetByIcao(code))
+            .OfType<Airport>();
+
     // All-checked (the default) is a no-op, so behavior is unchanged for anyone who has never
     // synced OpenAIP data (every airport is Unclassified).
     private static IEnumerable<Airport> ApplyAirportTypeFilter(IEnumerable<Airport> candidates, AirportFilterCriteria criteria)

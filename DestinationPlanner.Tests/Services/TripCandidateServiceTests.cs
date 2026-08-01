@@ -71,6 +71,36 @@ public class TripCandidateServiceTests
     }
 
     [Fact]
+    public void GetCandidates_IcaoPrefixExactCode_OverridesOtherFilters()
+    {
+        // IcaoPrefixes still narrows the whole result to prefix-matching airports (existing,
+        // unchanged "restrict by region" behavior) — with a single 4-char code that means only
+        // that airport is even in play. This test isolates just the override: it should survive
+        // a MinRunwayFt that would otherwise exclude it.
+        var service = new TripCandidateService(CreateAirports(), new FakeLogbookService());
+        var criteria = new AirportFilterCriteria { MinRunwayFt = 12000, IcaoPrefixes = ["EFHK"] };
+
+        var result = service.GetCandidates(criteria, excludeVisited: false);
+
+        Assert.Contains(result, a => a.Icao == "EFHK");   // overridden back in despite its 10000ft runway failing the 12000ft floor
+        Assert.DoesNotContain(result, a => a.Icao == "ENGM"); // not named — excluded both by the runway filter and by prefix narrowing
+    }
+
+    [Fact]
+    public void GetCandidates_IcaoPrefixExactCode_OverridesExcludeVisited()
+    {
+        var logbook = new FakeLogbookService();
+        logbook.SetFlights([new FlightRecord { DepartureIcao = "EFHK", ArrivalIcao = "ENGM" }]);
+        var service = new TripCandidateService(CreateAirports(), logbook);
+        var criteria = new AirportFilterCriteria { IcaoPrefixes = ["EFHK"] };
+
+        var result = service.GetCandidates(criteria, excludeVisited: true);
+
+        Assert.Contains(result, a => a.Icao == "EFHK");      // visited, but named — override brings it back
+        Assert.DoesNotContain(result, a => a.Icao == "ENGM"); // visited and not named — stays excluded
+    }
+
+    [Fact]
     public void GetCandidates_AirportDataNotLoaded_ReturnsEmpty()
     {
         var airports = CreateAirports();

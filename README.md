@@ -120,7 +120,7 @@ The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, 
 | ATIS | Show only airports that have ATIS |
 | Show visited / not-visited | Toggle airports you have or have not flown to/from |
 | Centre ICAO + Radius | Show only airports within N nm of the given airport |
-| ICAO prefixes | Comma-separated prefixes to restrict by country or region (e.g. `EF,ES`) |
+| ICAO prefixes | Comma-separated prefixes to restrict by country or region (e.g. `EF,ES`). A full 4-character ICAO code (e.g. `LFNC`) always shows that specific airport, overriding every other active filter |
 | Airport Type | Civil / Military / Heliport / Private / Other (Special-Use) / Unknown / Unclassified — all checked by default. Unclassified covers every airport until you sync OpenAIP data (see below) |
 
 Click **Apply Filters** to update the map. **Clear** resets all filters to their defaults. Filter selections are remembered across app restarts — whatever was active the last time you clicked **Apply Filters** (or **Clear**) is restored automatically on the next launch, so recurring searches don't need to be re-entered every session.

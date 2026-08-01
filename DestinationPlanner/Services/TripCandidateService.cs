@@ -29,6 +29,7 @@ public sealed class TripCandidateService(IAirportDataService airportData, ILogbo
             filtered = filtered.Where(a => !visited.Contains(a.Icao));
         }
 
-        return filtered.ToList();
+        var overrides = AirportFilterService.ResolveIcaoOverrides(airportData, criteria.IcaoPrefixes);
+        return filtered.UnionBy(overrides, a => a.Icao, StringComparer.OrdinalIgnoreCase).ToList();
     }
 }

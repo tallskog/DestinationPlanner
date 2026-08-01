@@ -112,6 +112,46 @@ public class AirportFilterServiceTests
     }
 
     [Fact]
+    public void ResolveIcaoOverrides_FourCharacterCode_ReturnsMatchingAirport()
+    {
+        var airports = CreateAirports();
+
+        var result = AirportFilterService.ResolveIcaoOverrides(airports, ["EFHK"]);
+
+        Assert.Equal(["EFHK"], result.Select(a => a.Icao));
+    }
+
+    [Fact]
+    public void ResolveIcaoOverrides_IgnoresEntriesNotExactlyFourCharacters()
+    {
+        var airports = CreateAirports();
+
+        var result = AirportFilterService.ResolveIcaoOverrides(airports, ["EF", "EFHK12"]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ResolveIcaoOverrides_UnknownFourCharacterCode_IsSkippedNotThrown()
+    {
+        var airports = CreateAirports();
+
+        var result = AirportFilterService.ResolveIcaoOverrides(airports, ["NOPE"]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ResolveIcaoOverrides_MultipleCodes_ReturnsAllMatches()
+    {
+        var airports = CreateAirports();
+
+        var result = AirportFilterService.ResolveIcaoOverrides(airports, ["EFHK", "EGLL"]);
+
+        Assert.Equal(["EFHK", "EGLL"], result.Select(a => a.Icao).OrderBy(x => x));
+    }
+
+    [Fact]
     public void ApplyCenterRadius_FromAirportDataService_ReturnsAirportsWithinRadius()
     {
         var airports = CreateAirports();
