@@ -81,7 +81,7 @@ The map tab requires airport data from [OurAirports](https://ourairports.com/dat
 3. Place both files in the same folder
 4. In the app: **File → Load Airport Data…** → select `airports.csv`
 
-The app auto-detects `runways.csv` next to `airports.csv`. Without runway data, the runway-length filter has no effect and the centerline deviation / touchdown zone components of the landing rating are skipped (the rating is computed from the remaining factors).
+The app auto-detects `runways.csv` next to `airports.csv`. This runway-length filter has no effect without it. The centerline deviation / touchdown zone components of the landing rating primarily use the *live* runway position fetched from MSFS via SimConnect at landing time (so they reflect any repositioning by installed Community/third-party scenery, not just the real-world surveyed position) — `runways.csv` is only used as a fallback when that live lookup is unavailable, so those two components are skipped only if both the live lookup fails and no `runways.csv` is loaded (the rating is computed from the remaining factors).
 
 ## SimConnect setup
 

@@ -62,6 +62,39 @@ public class SimConnectService : ISimConnectService
     private enum Defs { SimData }
     private enum Reqs { SimData }
 
+    // Facility Data API — used to fetch the runway's *actual in-sim* position at
+    // landing time (community scenery can reposition runways vs. OurAirports'
+    // real-world survey coordinates; see LandingRatingHelper centerline scoring).
+    private enum FacilityDefs { Runway }
+    private enum FacilityReqs { Runway }
+
+    // Unused beyond satisfying SimConnect's marshaling requirement: registering a
+    // struct for the parent AIRPORT row is mandatory even when only RUNWAY fields
+    // are requested, or the airport-row callback throws InvalidCastException.
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private struct FacilityAirportData
+    {
+        public double Latitude;
+    }
+
+    // One row per physical runway strip (both thresholds), not per direction.
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    private struct FacilityRunwayData
+    {
+        public double Latitude, Longitude, Heading, Length;
+        public int PrimaryNumber, PrimaryDesignator, SecondaryNumber, SecondaryDesignator;
+    }
+
+    // Holds a flight record that's fully built except for runway geometry, while we
+    // wait for the async facility-data round trip (or its timeout/fallback) to resolve
+    // the runway list to score it against.
+    private sealed record PendingCompletion(
+        FlightRecord Record, double Lat, double Lon, string ArrivalIcao,
+        DateTime RequestSentUtc, List<Runway> LiveRunways);
+
+    private PendingCompletion? _pending;
+    private const int FacilityDataTimeoutSeconds = 3;
+
     // Field order must match AddToDataDefinition call order exactly (Pack=1, Sequential).
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
     private struct SimData
@@ -129,6 +162,25 @@ public class SimConnectService : ISimConnectService
             _sc.AddToDataDefinition(Defs.SimData, "TITLE",                     null,         SIMCONNECT_DATATYPE.STRING256, 0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.RegisterDataDefineStruct<SimData>(Defs.SimData);
 
+            // Facility definition for live runway geometry at the arrival airport.
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "OPEN AIRPORT");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "LATITUDE");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "OPEN RUNWAY");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "LATITUDE");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "LONGITUDE");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "HEADING");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "LENGTH");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "PRIMARY_NUMBER");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "PRIMARY_DESIGNATOR");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "SECONDARY_NUMBER");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "SECONDARY_DESIGNATOR");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "CLOSE RUNWAY");
+            _sc.AddToFacilityDefinition(FacilityDefs.Runway, "CLOSE AIRPORT");
+            _sc.RegisterFacilityDataDefineStruct<FacilityAirportData>(SIMCONNECT_FACILITY_DATA_TYPE.AIRPORT);
+            _sc.RegisterFacilityDataDefineStruct<FacilityRunwayData>(SIMCONNECT_FACILITY_DATA_TYPE.RUNWAY);
+            _sc.OnRecvFacilityData    += OnFacilityData;
+            _sc.OnRecvFacilityDataEnd += OnFacilityDataEnd;
+
             // Use VISUAL_FRAME for > 1 Hz to improve landing-stats accuracy.
             // interval = every Nth visual frame; at 60 fps sim: Hz = 60 / interval.
             var (period, interval) = _simDataRateHz > 1
@@ -188,12 +240,18 @@ public class SimConnectService : ISimConnectService
         _aircraftModel    = string.Empty;
         _lastLandingStats = null;
         _landingWindow.Clear();
+        _pending          = null;
         _connectedAt      = DateTime.UtcNow;
         SetConnected(true);
     }
 
     private void OnQuit(SimConnect sender, SIMCONNECT_RECV data)
     {
+        // The sim is gone, so the live facility-data round trip will never complete —
+        // finalize with the OurAirports fallback rather than losing an already-flown leg.
+        if (_pending is not null)
+            FinalizePending(_airports.GetByIcao(_pending.ArrivalIcao)?.Runways);
+
         _inFlight                   = false;
         _initialized                = false;
         _departureIcao              = null;
@@ -236,6 +294,10 @@ public class SimConnectService : ISimConnectService
             _lastOnGround = onGround;
             return;
         }
+
+        // A stalled/lost facility-data response shouldn't hold up logging the flight.
+        if (_pending is not null && (DateTime.UtcNow - _pending.RequestSentUtc).TotalSeconds > FacilityDataTimeoutSeconds)
+            FinalizePending(_airports.GetByIcao(_pending.ArrivalIcao)?.Runways);
 
         // Always broadcast position so the map marker stays current.
         PositionChanged?.Invoke(this, new AircraftPositionEventArgs(
@@ -329,15 +391,29 @@ public class SimConnectService : ISimConnectService
 
                 if (_lastLandingStats is not null)
                 {
-                    var arrivalAirport = _airports.GetByIcao(arrivalIcao);
-                    LandingRatingHelper.Enrich(
-                        record,
-                        _lastLandingStats.Latitude,
-                        _lastLandingStats.Longitude,
-                        arrivalAirport?.Runways);
+                    // Defer completion until the live in-sim runway geometry for this
+                    // airport comes back (see OnFacilityData/OnFacilityDataEnd), so
+                    // centerline/TDZ scoring reflects what's actually rendered here —
+                    // not OurAirports' real-world survey coordinates — falling back to
+                    // OurAirports only if the live lookup fails, is empty, or times out.
+                    _pending = new PendingCompletion(
+                        record, _lastLandingStats.Latitude, _lastLandingStats.Longitude,
+                        arrivalIcao, DateTime.UtcNow, []);
+
+                    try
+                    {
+                        _sc?.RequestFacilityData(FacilityDefs.Runway, FacilityReqs.Runway, arrivalIcao, "");
+                    }
+                    catch (COMException)
+                    {
+                        FinalizePending(_airports.GetByIcao(arrivalIcao)?.Runways);
+                    }
+                }
+                else
+                {
+                    FlightCompleted?.Invoke(this, record);
                 }
 
-                FlightCompleted?.Invoke(this, record);
                 _departureIcao    = null;
                 _aircraftModel    = string.Empty;
                 _lastLandingStats = null;
@@ -348,6 +424,77 @@ public class SimConnectService : ISimConnectService
         }
 
         _lastBrake = brakeOn;
+    }
+
+    private void OnFacilityData(SimConnect sender, SIMCONNECT_RECV_FACILITY_DATA data)
+    {
+        if (_pending is null || data.UserRequestId != (uint)FacilityReqs.Runway) return;
+        if ((SIMCONNECT_FACILITY_DATA_TYPE)data.Type != SIMCONNECT_FACILITY_DATA_TYPE.RUNWAY) return;
+
+        var fr = (FacilityRunwayData)data.Data[0];
+        _pending.LiveRunways.Add(ConvertFacilityRunway(fr));
+    }
+
+    private void OnFacilityDataEnd(SimConnect sender, SIMCONNECT_RECV_FACILITY_DATA_END data)
+    {
+        if (_pending is null || data.RequestId != (uint)FacilityReqs.Runway) return;
+
+        var runways = _pending.LiveRunways.Count > 0
+            ? (IReadOnlyList<Runway>)_pending.LiveRunways
+            : _airports.GetByIcao(_pending.ArrivalIcao)?.Runways;
+        FinalizePending(runways);
+    }
+
+    // Completes a flight record once its runway geometry source (live facility data,
+    // the OurAirports fallback, or null) has been decided, and raises FlightCompleted.
+    private void FinalizePending(IReadOnlyList<Runway>? runways)
+    {
+        var pending = _pending;
+        if (pending is null) return;
+        _pending = null;
+
+        LandingRatingHelper.Enrich(pending.Record, pending.Lat, pending.Lon, runways);
+        FlightCompleted?.Invoke(this, pending.Record);
+    }
+
+    // A facility RUNWAY record gives the strip's center point + the primary end's
+    // approach heading + total length (meters), not threshold coordinates directly.
+    // Derive the two thresholds by projecting +/- half-length along that heading,
+    // using the same flat-earth approximation LandingRatingHelper's geometry uses.
+    private static Runway ConvertFacilityRunway(FacilityRunwayData fr)
+    {
+        const double mPerLat = 110540;
+        double mPerLon  = Math.Cos(fr.Latitude * Math.PI / 180) * 111320;
+        double halfLenM = fr.Length / 2.0;
+        double headingRad = fr.Heading * Math.PI / 180;
+        double dLat = Math.Cos(headingRad) * halfLenM / mPerLat;
+        double dLon = Math.Sin(headingRad) * halfLenM / mPerLon;
+
+        return new Runway
+        {
+            Ident        = $"{DesignatorLabel(fr.PrimaryNumber, fr.PrimaryDesignator)}/{DesignatorLabel(fr.SecondaryNumber, fr.SecondaryDesignator)}",
+            LengthFt     = (int)Math.Round(fr.Length * 3.28084),
+            LeLatitude   = fr.Latitude - dLat,
+            LeLongitude  = fr.Longitude - dLon,
+            LeHeadingDeg = fr.Heading,
+            HeLatitude   = fr.Latitude + dLat,
+            HeLongitude  = fr.Longitude + dLon,
+            HeHeadingDeg = (fr.Heading + 180) % 360,
+        };
+    }
+
+    // Cosmetic label only (e.g. "09L") — never read by the centerline/TDZ geometry math,
+    // which uses only the coordinates and heading above.
+    private static string DesignatorLabel(int number, int designator)
+    {
+        string suffix = designator switch
+        {
+            1 => "L",
+            2 => "R",
+            3 => "C",
+            _ => "",
+        };
+        return $"{number:00}{suffix}";
     }
 
     // Returns the ICAO of the nearest airport within 15 nm, or null if none found.
