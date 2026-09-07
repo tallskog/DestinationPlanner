@@ -1,0 +1,53 @@
+<Window x:Class="DestinationPlanner.Views.EditAirportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Edit Airport"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+
+    <StackPanel Margin="16">
+        <TextBlock x:Name="HeaderText" TextWrapping="Wrap" Margin="0,0,0,12" FontSize="11" Foreground="Gray"/>
+
+        <TextBlock Text="Override each field independently — leave a field at &quot;(No override)&quot; or blank to keep using the detected value."
+                   TextWrapping="Wrap" Margin="0,0,0,12" FontSize="11"/>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="140"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="Airport type" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <ComboBox x:Name="TypeCombo" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="Name" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <TextBox x:Name="NameBox" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="Has ATIS" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <ComboBox x:Name="AtisCombo" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="3" Grid.Column="0" Text="Has instrument approach" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <ComboBox x:Name="IlsCombo" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="Longest runway (ft)" VerticalAlignment="Center" Margin="0,0,8,8"/>
+            <TextBox x:Name="RunwayFtBox" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"/>
+        </Grid>
+
+        <CheckBox x:Name="HiddenCheck" Margin="0,4,0,16">
+            <TextBlock Text="Hide this airport from the map, regardless of filters" TextWrapping="Wrap" MaxWidth="360"/>
+        </CheckBox>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Width="80" IsCancel="True" Margin="0,0,8,0"/>
+            <Button Content="OK" Width="80" IsDefault="True" Click="Save_Click"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

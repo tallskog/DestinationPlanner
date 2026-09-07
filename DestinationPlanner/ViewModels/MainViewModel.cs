@@ -23,6 +23,10 @@ public class MainViewModel : ViewModelBase
     // OpenAIP airport-type integration (US34). Fully optional — see OpenAipCredentials.
     public IOpenAipDataService OpenAipData { get; }
 
+    // Manual per-airport corrections layered on top of OurAirports/OpenAIP (see
+    // Services/AirportOverrideService) — right-click "Edit Airport" on any map surface.
+    public IAirportOverrideService AirportOverrides { get; }
+
     // Re-applied after every AirportDataService.LoadAsync call, since LoadAsync rebuilds
     // the airport dictionary from scratch and would otherwise wipe classifications.
     public IReadOnlyDictionary<string, AirportType>? LastAppliedOpenAipTypesByIcao { get; set; }
@@ -50,6 +54,7 @@ public class MainViewModel : ViewModelBase
         AirportData = new AirportDataService();
         Settings = settings;
         OpenAipData = new OpenAipDataService();
+        AirportOverrides = new AirportOverrideService();
 
         var sim = new SimConnectService(AirportData, settings.SimDataRateHz);
         sim.FlightCompleted   += (_, record) => logbook.AddFlight(record);

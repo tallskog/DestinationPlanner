@@ -30,6 +30,6 @@ public partial class LogbookView : UserControl
         if (DataContext is not LogbookViewModel vm || vm.SelectedFlight is not { } flight) return;
         if (Window.GetWindow(this)?.DataContext is not MainViewModel mainVm) return;
 
-        new FlightLegMapWindow(flight, mainVm.AirportData) { Owner = Window.GetWindow(this) }.Show();
+        new FlightLegMapWindow(flight, mainVm.AirportData, mainVm.AirportOverrides) { Owner = Window.GetWindow(this) }.Show();
     }
 }

@@ -95,6 +95,8 @@ public partial class MainWindow : Window
         {
             await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
             await TryApplyCachedOpenAipTypesAsync(vm);
+            await vm.AirportOverrides.LoadAsync();
+            vm.AirportOverrides.ApplyAll(vm.AirportData);
             vm.Map.NotifyAirportDataLoaded();
         }
         catch { /* silently skip if cached files are corrupt – user can reload manually */ }
@@ -198,6 +200,7 @@ public partial class MainWindow : Window
         {
             await vm.AirportData.LoadAsync(destAirports, destRunways, destFrequencies);
             ReapplyOpenAipTypes(vm);
+            vm.AirportOverrides.ApplyAll(vm.AirportData);
             vm.Map.NotifyAirportDataLoaded();
 
             var missing = new List<string>();
@@ -249,6 +252,7 @@ public partial class MainWindow : Window
             var vm = (MainViewModel)DataContext;
             await vm.AirportData.LoadAsync(airportsCsv, runwaysCsv, frequenciesCsv);
             ReapplyOpenAipTypes(vm);
+            vm.AirportOverrides.ApplyAll(vm.AirportData);
             vm.Map.NotifyAirportDataLoaded();
 
             MessageBox.Show("Airport data downloaded and loaded successfully.", "Download complete",

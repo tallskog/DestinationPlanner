@@ -10,6 +10,7 @@ using MapsuiBrush = Mapsui.Styles.Brush;
 using MapsuiColor = Mapsui.Styles.Color;
 using MapsuiPen   = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
+using Mapsui.UI.Wpf.Extensions;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -556,6 +557,7 @@ public partial class MapView : UserControl
         _vm.Filters.PropertyChanged += OnVmPropertyChanged;
         _vm.AircraftMoved  += (_, e) => Dispatcher.Invoke(() => UpdateAircraftMarker(e));
         MapCtrl.Info += OnMapInfo;
+        MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
 
         _airportLayer  = new MemoryLayer { Name = "Airports",      Style = AirportStyle  };
         _greenRingLayer = new MemoryLayer { Name = "DepartedRings", Style = GreenRingStyle };
@@ -762,6 +764,36 @@ public partial class MapView : UserControl
         }
 
         UpdateSelectionLine();
+    }
+
+    // ---- Right-click "Edit Airport" (US47) ----
+
+    private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_airportLayer is null || _logbookLayer is null || _greenRingLayer is null || _redRingLayer is null) return;
+
+        var position = e.GetPosition(MapCtrl).ToScreenPosition();
+        var feature = MapCtrl.GetMapInfo(position, new[] { _logbookLayer, _greenRingLayer, _redRingLayer, _airportLayer })?.Feature;
+        var icao = feature?["icao"] as string;
+        var airport = icao is null ? null : _vm?.GetAirportByIcao(icao);
+        if (airport is null) return;
+
+        var overrides = (Window.GetWindow(this)?.DataContext as MainViewModel)?.AirportOverrides;
+        if (overrides is null) return;
+
+        var menu = new ContextMenu();
+        var item = new MenuItem { Header = "Edit Airport..." };
+        item.Click += (_, _) =>
+        {
+            var dlg = new EditAirportDialog(airport, overrides) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() != true) return;
+
+            RefreshAirportLayer();
+            if (ReferenceEquals(_primaryAirport, airport)) OpenInfoBox(airport, isPrimary: true);
+            if (ReferenceEquals(_secondaryAirport, airport)) OpenInfoBox(airport, isPrimary: false);
+        };
+        menu.Items.Add(item);
+        menu.IsOpen = true;
     }
 
     // ---- Info box management ----

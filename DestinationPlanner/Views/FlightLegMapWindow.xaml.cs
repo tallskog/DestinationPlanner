@@ -8,6 +8,7 @@ using MapsuiBrush = Mapsui.Styles.Brush;
 using MapsuiColor = Mapsui.Styles.Color;
 using MapsuiPen = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
+using Mapsui.UI.Wpf.Extensions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -30,6 +31,7 @@ public partial class FlightLegMapWindow : Window
 {
     private readonly FlightRecord _flight;
     private readonly IAirportDataService _airportData;
+    private readonly IAirportOverrideService _overrideService;
     private readonly IMetarService _metarService = new MetarService();
 
     private MemoryLayer? _airportLayer;
@@ -50,11 +52,12 @@ public partial class FlightLegMapWindow : Window
 
     private static readonly SolidColorBrush RunwayForeground = new(System.Windows.Media.Color.FromRgb(0x44, 0x44, 0x44));
 
-    public FlightLegMapWindow(FlightRecord flight, IAirportDataService airportData)
+    public FlightLegMapWindow(FlightRecord flight, IAirportDataService airportData, IAirportOverrideService overrideService)
     {
         InitializeComponent();
         _flight = flight;
         _airportData = airportData;
+        _overrideService = overrideService;
         TitleText.Text = $"{flight.DepartureIcao} → {flight.ArrivalIcao} — {flight.Date:yyyy-MM-dd}";
         Loaded += OnLoaded;
     }
@@ -93,6 +96,7 @@ public partial class FlightLegMapWindow : Window
 
         MapCtrl.Map = map;
         MapCtrl.Info += OnMapInfo;
+        MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
 
         _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, RouteOverlay,
             () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
@@ -210,6 +214,37 @@ public partial class FlightLegMapWindow : Window
         _secondaryAirport = to;
         OpenInfoBox(from, isPrimary: true);
         OpenInfoBox(to, isPrimary: false);
+    }
+
+    // ---- Right-click "Edit Airport" (US47) ----
+    // A "Hidden" override deliberately doesn't remove this leg's own airport from its own
+    // dedicated map — it's the fixed subject of the window, not a filterable pool.
+
+    private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_airportLayer is null || _from is null || _to is null) return;
+
+        var position = e.GetPosition(MapCtrl).ToScreenPosition();
+        var feature = MapCtrl.GetMapInfo(position, new[] { _airportLayer })?.Feature;
+        var icao = feature?["icao"] as string;
+        var airport = icao is null ? null
+            : string.Equals(icao, _from.Icao, StringComparison.OrdinalIgnoreCase) ? _from
+            : string.Equals(icao, _to.Icao, StringComparison.OrdinalIgnoreCase) ? _to
+            : null;
+        if (airport is null) return;
+
+        var menu = new ContextMenu();
+        var item = new MenuItem { Header = "Edit Airport..." };
+        item.Click += (_, _) =>
+        {
+            var dlg = new EditAirportDialog(airport, _overrideService) { Owner = this };
+            if (dlg.ShowDialog() != true) return;
+
+            if (ReferenceEquals(_primaryAirport, airport)) OpenInfoBox(airport, isPrimary: true);
+            if (ReferenceEquals(_secondaryAirport, airport)) OpenInfoBox(airport, isPrimary: false);
+        };
+        menu.Items.Add(item);
+        menu.IsOpen = true;
     }
 
     private static double Distance(double x1, double y1, double x2, double y2)

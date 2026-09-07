@@ -8,8 +8,10 @@ using MapsuiBrush = Mapsui.Styles.Brush;
 using MapsuiColor = Mapsui.Styles.Color;
 using MapsuiPen = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
+using Mapsui.UI.Wpf.Extensions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 
 namespace DestinationPlanner.Views;
@@ -24,6 +26,7 @@ public partial class CandidateMapWindow : Window
 {
     private readonly IReadOnlyList<Airport> _candidates;
     private readonly Dictionary<string, Airport> _byIcao;
+    private readonly IAirportOverrideService _overrideService;
     private readonly IMetarService _metarService = new MetarService();
 
     private MemoryLayer? _airportLayer;
@@ -33,11 +36,12 @@ public partial class CandidateMapWindow : Window
 
     private static readonly SolidColorBrush RunwayForeground = new(System.Windows.Media.Color.FromRgb(0x44, 0x44, 0x44));
 
-    public CandidateMapWindow(IReadOnlyList<Airport> candidates)
+    public CandidateMapWindow(IReadOnlyList<Airport> candidates, IAirportOverrideService overrideService)
     {
         InitializeComponent();
         _candidates = candidates;
         _byIcao = candidates.ToDictionary(a => a.Icao, StringComparer.OrdinalIgnoreCase);
+        _overrideService = overrideService;
         TitleText.Text = $"{candidates.Count} candidate airport(s)";
         Loaded += OnLoaded;
     }
@@ -62,6 +66,7 @@ public partial class CandidateMapWindow : Window
 
         MapCtrl.Map = map;
         MapCtrl.Info += OnMapInfo;
+        MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
 
         _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, MarkerOverlay,
             () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
@@ -109,6 +114,43 @@ public partial class CandidateMapWindow : Window
 
         _primaryAirport = airport;
         OpenInfoBox(airport);
+    }
+
+    // ---- Right-click "Edit Airport" (US47) ----
+    // Hiding an airport here does remove it from view immediately — unlike TripMapWindow/
+    // FlightLegMapWindow's fixed leg views, this window represents a filterable candidate pool.
+
+    private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_airportLayer is null) return;
+
+        var position = e.GetPosition(MapCtrl).ToScreenPosition();
+        var feature = MapCtrl.GetMapInfo(position, new[] { _airportLayer })?.Feature;
+        var icao = feature?["icao"] as string;
+        if (icao is null || !_byIcao.TryGetValue(icao, out var airport)) return;
+
+        var menu = new ContextMenu();
+        var item = new MenuItem { Header = "Edit Airport..." };
+        item.Click += (_, _) =>
+        {
+            var dlg = new EditAirportDialog(airport, _overrideService) { Owner = this };
+            if (dlg.ShowDialog() != true) return;
+
+            _airportLayer.Features = _candidates.Where(a => !a.IsHidden).Select(MakeFeature).ToList();
+            _airportLayer.DataHasChanged();
+
+            if (airport.IsHidden)
+            {
+                CloseBox();
+                _primaryAirport = null;
+            }
+            else if (ReferenceEquals(_primaryAirport, airport))
+            {
+                OpenInfoBox(airport);
+            }
+        };
+        menu.Items.Add(item);
+        menu.IsOpen = true;
     }
 
     private void OpenInfoBox(Airport airport)

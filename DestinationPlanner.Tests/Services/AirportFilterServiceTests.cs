@@ -152,6 +152,67 @@ public class AirportFilterServiceTests
     }
 
     [Fact]
+    public void ApplyRunwayTypeAndPrefixFilters_HiddenOverride_ExcludesAirportEvenIfEverythingElseMatches()
+    {
+        var airports = CreateAirports();
+        airports.GetByIcao("EFHK")!.Override = new AirportOverride { IsHidden = true };
+
+        var result = AirportFilterService.ApplyRunwayTypeAndPrefixFilters(airports.GetAll(), new AirportFilterCriteria());
+
+        Assert.DoesNotContain(result, a => a.Icao == "EFHK");
+        Assert.Equal(6, result.Count());
+    }
+
+    [Fact]
+    public void ResolveIcaoOverrides_HiddenAirport_IsExcludedEvenWhenNamedExactly()
+    {
+        var airports = CreateAirports();
+        airports.GetByIcao("EFHK")!.Override = new AirportOverride { IsHidden = true };
+
+        var result = AirportFilterService.ResolveIcaoOverrides(airports, ["EFHK"]);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ApplyRunwayTypeAndPrefixFilters_TypeOverride_FiltersByEffectiveTypeNotBaseline()
+    {
+        var airports = CreateAirports();
+        // EFHK's baseline type is Civil; overriding it to Military should make the
+        // "hide military" filter apply to it even though its stored Type is still Civil.
+        airports.GetByIcao("EFHK")!.Override = new AirportOverride { Type = AirportType.Military };
+
+        var result = AirportFilterService.ApplyRunwayTypeAndPrefixFilters(
+            airports.GetAll(), new AirportFilterCriteria { ShowMilitaryAirports = false });
+
+        Assert.DoesNotContain(result, a => a.Icao == "EFHK"); // now excluded as (effectively) military
+        Assert.DoesNotContain(result, a => a.Icao == "EFTU"); // baseline military, excluded as before
+        Assert.Equal(5, result.Count());
+    }
+
+    [Fact]
+    public void ApplyRunwayTypeAndPrefixFilters_RunwayAndAtisAndIlsOverrides_UseEffectiveValues()
+    {
+        var airports = CreateAirports();
+        // EFTU's baseline fails every one of these filters; override each field to pass instead.
+        airports.GetByIcao("EFTU")!.Override = new AirportOverride
+        {
+            LongestRunwayFt = 9000,
+            HasAtis = true,
+            HasInstrumentApproach = true,
+        };
+
+        var result = AirportFilterService.ApplyRunwayTypeAndPrefixFilters(airports.GetAll(), new AirportFilterCriteria
+        {
+            MinRunwayFt = 9000,
+            RequireAtis = true,
+            RequireInstrumentApproach = true,
+        });
+
+        Assert.Contains(result, a => a.Icao == "EFTU");
+    }
+
+    [Fact]
     public void ApplyCenterRadius_FromAirportDataService_ReturnsAirportsWithinRadius()
     {
         var airports = CreateAirports();

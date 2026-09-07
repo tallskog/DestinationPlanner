@@ -91,8 +91,9 @@ public partial class TripPlanView : UserControl
     private void ViewCandidatesOnMap_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not TripPlanViewModel vm || vm.Candidates.Count == 0) return;
+        if (Window.GetWindow(this)?.DataContext is not MainViewModel mainVm) return;
 
-        new CandidateMapWindow(vm.Candidates.ToList()) { Owner = Window.GetWindow(this) }.Show();
+        new CandidateMapWindow(vm.Candidates.ToList(), mainVm.AirportOverrides) { Owner = Window.GetWindow(this) }.Show();
     }
 
     // Opening a Window is a View-layer concern — kept out of TripPlanViewModel so it stays
@@ -101,8 +102,9 @@ public partial class TripPlanView : UserControl
     private void ViewOnMap_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not TripPlanViewModel vm || vm.SelectedPlan is null) return;
+        if (Window.GetWindow(this)?.DataContext is not MainViewModel mainVm) return;
 
-        var window = new TripMapWindow(vm.SelectedPlan, vm.AirportData) { Owner = Window.GetWindow(this) };
+        var window = new TripMapWindow(vm.SelectedPlan, vm.AirportData, mainVm.AirportOverrides) { Owner = Window.GetWindow(this) };
         window.Closed += (_, _) =>
         {
             if (ReferenceEquals(_openMapWindow, window)) { _openMapWindow = null; _openMapWindowPlan = null; }

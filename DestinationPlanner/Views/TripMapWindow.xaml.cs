@@ -8,6 +8,7 @@ using MapsuiBrush = Mapsui.Styles.Brush;
 using MapsuiColor = Mapsui.Styles.Color;
 using MapsuiPen = Mapsui.Styles.Pen;
 using Mapsui.Tiling;
+using Mapsui.UI.Wpf.Extensions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -30,6 +31,7 @@ public partial class TripMapWindow : Window
 {
     private readonly TripPlan _plan;
     private readonly IAirportDataService _airportData;
+    private readonly IAirportOverrideService _overrideService;
     private readonly IMetarService _metarService = new MetarService();
     private readonly List<(TripLeg Leg, Airport From, Airport To, Line Visible, Line HitTarget, Line Highlight, TextBlock DistanceLabel)> _routeLines = [];
 
@@ -47,11 +49,12 @@ public partial class TripMapWindow : Window
     // transparent so the underlying Flown/Planned color of the visible line stays legible.
     private static readonly SolidColorBrush HighlightBrush = new(System.Windows.Media.Color.FromArgb(170, 30, 144, 255));
 
-    public TripMapWindow(TripPlan plan, IAirportDataService airportData)
+    public TripMapWindow(TripPlan plan, IAirportDataService airportData, IAirportOverrideService overrideService)
     {
         InitializeComponent();
         _plan = plan;
         _airportData = airportData;
+        _overrideService = overrideService;
         TitleText.Text = plan.Title;
         Loaded += OnLoaded;
     }
@@ -85,6 +88,7 @@ public partial class TripMapWindow : Window
 
         MapCtrl.Map = map;
         MapCtrl.Info += OnMapInfo;
+        MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
 
         _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, RouteOverlay,
             () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
@@ -222,6 +226,34 @@ public partial class TripMapWindow : Window
         if (airport is null) return;
 
         ShowSingleAirport(airport);
+    }
+
+    // ---- Right-click "Edit Airport" (US47) ----
+    // Unlike MapView, a "Hidden" override here deliberately doesn't remove the airport — this
+    // window shows a fixed, already-chosen trip leg, not a filterable pool.
+
+    private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_airportLayer is null) return;
+
+        var position = e.GetPosition(MapCtrl).ToScreenPosition();
+        var feature = MapCtrl.GetMapInfo(position, new[] { _airportLayer })?.Feature;
+        var icao = feature?["icao"] as string;
+        var airport = icao is null ? null : _airportData.GetByIcao(icao);
+        if (airport is null) return;
+
+        var menu = new ContextMenu();
+        var item = new MenuItem { Header = "Edit Airport..." };
+        item.Click += (_, _) =>
+        {
+            var dlg = new EditAirportDialog(airport, _overrideService) { Owner = this };
+            if (dlg.ShowDialog() != true) return;
+
+            if (ReferenceEquals(_primaryAirport, airport)) OpenInfoBox(airport, isPrimary: true);
+            if (ReferenceEquals(_secondaryAirport, airport)) OpenInfoBox(airport, isPrimary: false);
+        };
+        menu.Items.Add(item);
+        menu.IsOpen = true;
     }
 
     // A plain marker click (or a line click landing within AirportClickRadiusPx of an endpoint)

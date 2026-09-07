@@ -36,14 +36,18 @@ public static class AirportFilterService
     // airport-type, and ICAO-prefix filters.
     public static IEnumerable<Airport> ApplyRunwayTypeAndPrefixFilters(IEnumerable<Airport> candidates, AirportFilterCriteria criteria)
     {
+        // A manually hidden airport (Airport.IsHidden) is excluded regardless of every other
+        // filter below, including the exact-ICAO override further down (see ResolveIcaoOverrides).
+        candidates = candidates.Where(a => !a.IsHidden);
+
         if (criteria.RequireInstrumentApproach)
-            candidates = candidates.Where(a => a.HasInstrumentApproach);
+            candidates = candidates.Where(a => a.EffectiveHasInstrumentApproach);
 
         if (criteria.RequireAtis)
-            candidates = candidates.Where(a => a.HasAtis);
+            candidates = candidates.Where(a => a.EffectiveHasAtis);
 
-        if (criteria.MinRunwayFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt >= criteria.MinRunwayFt);
-        if (criteria.MaxRunwayFt > 0) candidates = candidates.Where(a => a.LongestRunwayFt <= criteria.MaxRunwayFt);
+        if (criteria.MinRunwayFt > 0) candidates = candidates.Where(a => a.EffectiveLongestRunwayFt >= criteria.MinRunwayFt);
+        if (criteria.MaxRunwayFt > 0) candidates = candidates.Where(a => a.EffectiveLongestRunwayFt <= criteria.MaxRunwayFt);
 
         candidates = ApplyAirportTypeFilter(candidates, criteria);
 
@@ -62,7 +66,8 @@ public static class AirportFilterService
         icaoPrefixes
             .Where(p => p.Length == 4)
             .Select(code => airports.GetByIcao(code))
-            .OfType<Airport>();
+            .OfType<Airport>()
+            .Where(a => !a.IsHidden); // a manually hidden airport stays hidden even if named exactly (US45 vs. manual hide)
 
     // All-checked (the default) is a no-op, so behavior is unchanged for anyone who has never
     // synced OpenAIP data (every airport is Unclassified).
@@ -73,7 +78,7 @@ public static class AirportFilterService
             && criteria.ShowUnclassifiedAirports)
             return candidates;
 
-        return candidates.Where(a => a.Type switch
+        return candidates.Where(a => a.EffectiveType switch
         {
             AirportType.Civil => criteria.ShowCivilAirports,
             AirportType.Military => criteria.ShowMilitaryAirports,
