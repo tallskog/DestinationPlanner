@@ -117,4 +117,64 @@ public class AirportOverrideServiceTests : IDisposable
         Assert.Equal(AirportType.Private, freshAirports.GetByIcao("EFHK")!.EffectiveType);
         Assert.Null(freshAirports.GetByIcao("EFTU")!.Override);
     }
+
+    [Fact]
+    public async Task GetAll_ReturnsEveryPersistedOverrideKeyedByIcao()
+    {
+        var airports = CreateAirports();
+        var service = new AirportOverrideService();
+        await service.SaveOverrideAsync(airports.GetByIcao("EFHK")!, new AirportOverride { IsHidden = true });
+        await service.SaveOverrideAsync(airports.GetByIcao("EFTU")!, new AirportOverride { Type = AirportType.Civil });
+
+        var all = service.GetAll();
+
+        Assert.Equal(2, all.Count);
+        Assert.True(all["EFHK"].IsHidden);
+        Assert.Equal(AirportType.Civil, all["EFTU"].Type);
+    }
+
+    [Fact]
+    public async Task RemoveOverrideAsync_ByIcaoAlone_RemovesItAndPersists()
+    {
+        var airports = CreateAirports();
+        var service = new AirportOverrideService();
+        await service.SaveOverrideAsync(airports.GetByIcao("EFHK")!, new AirportOverride { IsHidden = true });
+
+        // Simulates the "manage overrides" window clearing an entry for an airport that isn't
+        // currently loaded (no live Airport instance available to pass to SaveOverrideAsync).
+        await service.RemoveOverrideAsync("EFHK");
+
+        Assert.Empty(service.GetAll());
+
+        var reader = new AirportOverrideService();
+        await reader.LoadAsync();
+        Assert.Empty(reader.GetAll());
+    }
+
+    [Fact]
+    public async Task SaveOverrideAsync_RaisesOverridesChanged_SoAnyOpenWindowCanRefreshImmediately()
+    {
+        var airports = CreateAirports();
+        var service = new AirportOverrideService();
+        int raisedCount = 0;
+        service.OverridesChanged += (_, _) => raisedCount++;
+
+        await service.SaveOverrideAsync(airports.GetByIcao("EFHK")!, new AirportOverride { IsHidden = true });
+
+        Assert.Equal(1, raisedCount);
+    }
+
+    [Fact]
+    public async Task RemoveOverrideAsync_RaisesOverridesChanged()
+    {
+        var airports = CreateAirports();
+        var service = new AirportOverrideService();
+        await service.SaveOverrideAsync(airports.GetByIcao("EFHK")!, new AirportOverride { IsHidden = true });
+        int raisedCount = 0;
+        service.OverridesChanged += (_, _) => raisedCount++;
+
+        await service.RemoveOverrideAsync("EFHK");
+
+        Assert.Equal(1, raisedCount);
+    }
 }

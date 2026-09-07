@@ -67,6 +67,8 @@ public partial class CandidateMapWindow : Window
         MapCtrl.Map = map;
         MapCtrl.Info += OnMapInfo;
         MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
+        _overrideService.OverridesChanged += OnAirportOverridesChanged;
+        Closed += (_, _) => _overrideService.OverridesChanged -= OnAirportOverridesChanged;
 
         _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, MarkerOverlay,
             () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
@@ -120,6 +122,28 @@ public partial class CandidateMapWindow : Window
     // Hiding an airport here does remove it from view immediately — unlike TripMapWindow/
     // FlightLegMapWindow's fixed leg views, this window represents a filterable candidate pool.
 
+    // Airport instances are shared/mutable, so _candidates/_primaryAirport already reflect an
+    // override made anywhere (this window, another map, or the Overrides list) — just redraw.
+    private void OnAirportOverridesChanged(object? sender, EventArgs e) => Dispatcher.Invoke(() =>
+    {
+        if (_airportLayer is null) return;
+
+        _airportLayer.Features = _candidates.Where(a => !a.IsHidden).Select(MakeFeature).ToList();
+        _airportLayer.DataHasChanged();
+
+        if (_primaryAirport is null) return;
+
+        if (_primaryAirport.IsHidden)
+        {
+            CloseBox();
+            _primaryAirport = null;
+        }
+        else
+        {
+            OpenInfoBox(_primaryAirport);
+        }
+    });
+
     private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_airportLayer is null) return;
@@ -131,24 +155,7 @@ public partial class CandidateMapWindow : Window
 
         var menu = new ContextMenu();
         var item = new MenuItem { Header = "Edit Airport..." };
-        item.Click += (_, _) =>
-        {
-            var dlg = new EditAirportDialog(airport, _overrideService) { Owner = this };
-            if (dlg.ShowDialog() != true) return;
-
-            _airportLayer.Features = _candidates.Where(a => !a.IsHidden).Select(MakeFeature).ToList();
-            _airportLayer.DataHasChanged();
-
-            if (airport.IsHidden)
-            {
-                CloseBox();
-                _primaryAirport = null;
-            }
-            else if (ReferenceEquals(_primaryAirport, airport))
-            {
-                OpenInfoBox(airport);
-            }
-        };
+        item.Click += (_, _) => new EditAirportDialog(airport, _overrideService) { Owner = this }.ShowDialog();
         menu.Items.Add(item);
         menu.IsOpen = true;
     }

@@ -11,6 +11,8 @@ namespace DestinationPlanner.Services;
 // ever overwritten by a manual edit. See Models/AirportOverride and Airport.Effective*/IsHidden.
 public class AirportOverrideService : IAirportOverrideService
 {
+    public event EventHandler? OverridesChanged;
+
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
@@ -63,6 +65,21 @@ public class AirportOverrideService : IAirportOverrideService
             airport.Override = value;
         }
 
+        await PersistAsync();
+        OverridesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public IReadOnlyDictionary<string, AirportOverride> GetAll() => _byIcao;
+
+    public async Task RemoveOverrideAsync(string icao)
+    {
+        _byIcao.Remove(icao);
+        await PersistAsync();
+        OverridesChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task PersistAsync()
+    {
         try
         {
             AppDataHelper.EnsureCreated();

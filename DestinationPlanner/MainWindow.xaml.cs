@@ -310,6 +310,14 @@ public partial class MainWindow : Window
         }
     }
 
+    // US48 – lists every saved airport override so one can be found and edited/cleared
+    // without having to relocate the airport on a map and right-click it again.
+    private void AirportOverrides_Click(object sender, RoutedEventArgs e)
+    {
+        var vm = (MainViewModel)DataContext;
+        new AirportOverridesWindow(vm.AirportData, vm.AirportOverrides) { Owner = this }.Show();
+    }
+
     // US41 – lets the user save/replace their Anthropic API key. Optional: the app works
     // normally without one, and "Plan a Trip…" stays disabled until a key is configured.
     private void ConfigureAi_Click(object sender, RoutedEventArgs e)

@@ -41,6 +41,7 @@
                 <MenuItem Header="_Download Airport Data"   Click="DownloadAirportData_Click"/>
                 <Separator/>
                 <MenuItem Header="Update Airport _Type Data (OpenAIP)…" Click="UpdateOpenAipAirportTypes_Click"/>
+                <MenuItem Header="Airport _Overrides…"      Click="AirportOverrides_Click"/>
                 <Separator/>
                 <MenuItem Header="Configure _AI…"           Click="ConfigureAi_Click"/>
                 <MenuItem Header="_Plan a Trip…"            Click="PlanTrip_Click"/>

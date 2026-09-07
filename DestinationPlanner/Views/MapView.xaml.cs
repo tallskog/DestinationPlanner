@@ -559,6 +559,11 @@ public partial class MapView : UserControl
         MapCtrl.Info += OnMapInfo;
         MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
 
+        // Refresh immediately on any airport override change, regardless of which window made
+        // it (this map's own right-click edit, another map's, or the Airport Overrides list).
+        if ((Window.GetWindow(this)?.DataContext as MainViewModel)?.AirportOverrides is { } overrides)
+            overrides.OverridesChanged += OnAirportOverridesChanged;
+
         _airportLayer  = new MemoryLayer { Name = "Airports",      Style = AirportStyle  };
         _greenRingLayer = new MemoryLayer { Name = "DepartedRings", Style = GreenRingStyle };
         _redRingLayer   = new MemoryLayer { Name = "LandedRings",   Style = RedRingStyle  };
@@ -768,6 +773,15 @@ public partial class MapView : UserControl
 
     // ---- Right-click "Edit Airport" (US47) ----
 
+    // Airport instances are shared/mutable (the same object returned by every GetByIcao call),
+    // so _primaryAirport/_secondaryAirport already reflect whatever changed — just redraw.
+    private void OnAirportOverridesChanged(object? sender, EventArgs e) => Dispatcher.Invoke(() =>
+    {
+        RefreshAirportLayer();
+        if (_primaryAirport is not null) OpenInfoBox(_primaryAirport, isPrimary: true);
+        if (_secondaryAirport is not null) OpenInfoBox(_secondaryAirport, isPrimary: false);
+    });
+
     private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_airportLayer is null || _logbookLayer is null || _greenRingLayer is null || _redRingLayer is null) return;
@@ -783,15 +797,9 @@ public partial class MapView : UserControl
 
         var menu = new ContextMenu();
         var item = new MenuItem { Header = "Edit Airport..." };
-        item.Click += (_, _) =>
-        {
-            var dlg = new EditAirportDialog(airport, overrides) { Owner = Window.GetWindow(this) };
-            if (dlg.ShowDialog() != true) return;
-
-            RefreshAirportLayer();
-            if (ReferenceEquals(_primaryAirport, airport)) OpenInfoBox(airport, isPrimary: true);
-            if (ReferenceEquals(_secondaryAirport, airport)) OpenInfoBox(airport, isPrimary: false);
-        };
+        item.Click += (_, _) => new EditAirportDialog(airport, overrides) { Owner = Window.GetWindow(this) }.ShowDialog();
+        // No explicit refresh here — OverridesChanged (subscribed in OnLoaded) handles it,
+        // the same way it does for an edit made from any other window.
         menu.Items.Add(item);
         menu.IsOpen = true;
     }

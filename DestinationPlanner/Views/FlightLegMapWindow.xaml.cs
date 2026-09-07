@@ -97,6 +97,8 @@ public partial class FlightLegMapWindow : Window
         MapCtrl.Map = map;
         MapCtrl.Info += OnMapInfo;
         MapCtrl.MouseRightButtonUp += MapCtrl_MouseRightButtonUp;
+        _overrideService.OverridesChanged += OnAirportOverridesChanged;
+        Closed += (_, _) => _overrideService.OverridesChanged -= OnAirportOverridesChanged;
 
         _primaryBox = new DraggableInfoBox(PrimaryInfoBox, PrimaryLeaderLine, RouteOverlay,
             () => MapCtrl.ActualWidth, () => MapCtrl.ActualHeight,
@@ -220,6 +222,14 @@ public partial class FlightLegMapWindow : Window
     // A "Hidden" override deliberately doesn't remove this leg's own airport from its own
     // dedicated map — it's the fixed subject of the window, not a filterable pool.
 
+    // Airport instances are shared/mutable, so _primaryAirport/_secondaryAirport already
+    // reflect an override made anywhere (this window, another map, or the Overrides list).
+    private void OnAirportOverridesChanged(object? sender, EventArgs e) => Dispatcher.Invoke(() =>
+    {
+        if (_primaryAirport is not null) OpenInfoBox(_primaryAirport, isPrimary: true);
+        if (_secondaryAirport is not null) OpenInfoBox(_secondaryAirport, isPrimary: false);
+    });
+
     private void MapCtrl_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_airportLayer is null || _from is null || _to is null) return;
@@ -237,11 +247,7 @@ public partial class FlightLegMapWindow : Window
         var item = new MenuItem { Header = "Edit Airport..." };
         item.Click += (_, _) =>
         {
-            var dlg = new EditAirportDialog(airport, _overrideService) { Owner = this };
-            if (dlg.ShowDialog() != true) return;
-
-            if (ReferenceEquals(_primaryAirport, airport)) OpenInfoBox(airport, isPrimary: true);
-            if (ReferenceEquals(_secondaryAirport, airport)) OpenInfoBox(airport, isPrimary: false);
+            new EditAirportDialog(airport, _overrideService) { Owner = this }.ShowDialog();
         };
         menu.Items.Add(item);
         menu.IsOpen = true;
