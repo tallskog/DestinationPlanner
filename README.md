@@ -88,13 +88,14 @@ The app auto-detects `runways.csv` next to `airports.csv`. This runway-length fi
 
 > SimConnect is only needed if you want live flight recording from MSFS 2024. The rest of the app works without it.
 
-1. Install the **MSFS 2024 SDK** from the in-sim Marketplace or the MSFS developer tools page
-2. Locate `SimConnect.dll` — typically at:
-   ```
-   C:\MSFS SDK\SimConnect SDK\lib\static\SimConnect.dll
-   ```
-3. In Visual Studio: right-click the `DestinationPlanner` project → **Add → Project Reference → Browse** → select `SimConnect.dll`
-4. Implement the TODOs in [Services/SimConnectService.cs](DestinationPlanner/Services/SimConnectService.cs)
+The SimConnect libraries are bundled in [DestinationPlanner/Libs/](DestinationPlanner/Libs/) (currently from MSFS 2024 SDK 1.8.1) and copied to the build output automatically — no SDK install is needed to build or run the app.
+
+To update them after a new SDK release, copy these two files from the SDK into `DestinationPlanner/Libs/`:
+```
+<SDK>\SimConnect SDK\lib\SimConnect.dll
+<SDK>\SimConnect SDK\lib\managed\Microsoft.FlightSimulator.SimConnect.dll
+```
+(`<SDK>` is the folder in the `MSFS2024_SDK` environment variable, typically `C:\MSFS 2024 SDK\`.) Copy both together; the managed wrapper and the native DLL are a matched pair.
 
 ## Using the app
 
