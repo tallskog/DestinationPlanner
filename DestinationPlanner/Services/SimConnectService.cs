@@ -78,10 +78,14 @@ public class SimConnectService : ISimConnectService
     }
 
     // One row per physical runway strip (both thresholds), not per direction.
+    // Field types must match the SDK's facility data types exactly: LATITUDE/LONGITUDE
+    // are FLOAT64 but HEADING/LENGTH are FLOAT32 — declaring them double misaligns every
+    // later field (Length then reads as ~0 and every runway is skipped; BUG-16).
     [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    private struct FacilityRunwayData
+    internal struct FacilityRunwayData
     {
-        public double Latitude, Longitude, Heading, Length;
+        public double Latitude, Longitude;
+        public float  Heading, Length;
         public int PrimaryNumber, PrimaryDesignator, SecondaryNumber, SecondaryDesignator;
     }
 
@@ -111,6 +115,7 @@ public class SimConnectService : ISimConnectService
         public double PitchDegrees;     // PLANE PITCH DEGREES,      degrees (positive = nose up)
         public int    ParkingBrake;     // BRAKE PARKING INDICATOR,  Bool (0/1)
         public int    OnGround;         // SIM ON GROUND,            Bool (0/1)
+        public double FenixParkingBrake;// L:S_MIP_PARKING_BRAKE,    Fenix A320 (1 = set); 0 on other aircraft
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
         public string Title;            // TITLE,                    aircraft name
     }
@@ -159,6 +164,7 @@ public class SimConnectService : ISimConnectService
             _sc.AddToDataDefinition(Defs.SimData, "PLANE PITCH DEGREES",       "degrees",    SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "BRAKE PARKING INDICATOR",   "Bool",       SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "SIM ON GROUND",             "Bool",       SIMCONNECT_DATATYPE.INT32,     0f, SimConnect.SIMCONNECT_UNUSED);
+            _sc.AddToDataDefinition(Defs.SimData, "L:S_MIP_PARKING_BRAKE",     "Number",     SIMCONNECT_DATATYPE.FLOAT64,   0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.AddToDataDefinition(Defs.SimData, "TITLE",                     null,         SIMCONNECT_DATATYPE.STRING256, 0f, SimConnect.SIMCONNECT_UNUSED);
             _sc.RegisterDataDefineStruct<SimData>(Defs.SimData);
 
@@ -273,7 +279,7 @@ public class SimConnectService : ISimConnectService
         if (data.dwRequestID != (uint)Reqs.SimData) return;
 
         var sd       = (SimData)data.dwData[0];
-        bool brakeOn  = sd.ParkingBrake != 0;
+        bool brakeOn  = IsParkingBrakeSet(sd.ParkingBrake, sd.FenixParkingBrake);
         bool onGround = sd.OnGround != 0;
 
         if (!_initialized)
@@ -461,7 +467,7 @@ public class SimConnectService : ISimConnectService
     // approach heading + total length (meters), not threshold coordinates directly.
     // Derive the two thresholds by projecting +/- half-length along that heading,
     // using the same flat-earth approximation LandingRatingHelper's geometry uses.
-    private static Runway ConvertFacilityRunway(FacilityRunwayData fr)
+    internal static Runway ConvertFacilityRunway(FacilityRunwayData fr)
     {
         const double mPerLat = 110540;
         double mPerLon  = Math.Cos(fr.Latitude * Math.PI / 180) * 111320;
@@ -496,6 +502,12 @@ public class SimConnectService : ISimConnectService
         };
         return $"{number:00}{suffix}";
     }
+
+    // The Fenix A320 keeps its parking brake in its own L:var and doesn't mirror it to
+    // the standard BRAKE PARKING INDICATOR (which stays 0), so block-on was never seen
+    // (BUG-16). Either source counts as "set"; the L:var reads 0 on every other aircraft.
+    internal static bool IsParkingBrakeSet(int brakeParkingIndicator, double fenixParkingBrake)
+        => brakeParkingIndicator != 0 || fenixParkingBrake > 0.5;
 
     // Returns the ICAO of the nearest airport within 15 nm, or null if none found.
     // Only considers airports with standard ICAO-style identifiers (no hyphens).

@@ -102,7 +102,7 @@ To update them after a new SDK release, copy these two files from the SDK into `
 ### Recording flights
 1. Start MSFS 2024 and load a flight
 2. Open the app — it will connect automatically once you are on the apron
-3. Releasing the parking brake starts the recording; setting it again on arrival saves the flight
+3. Releasing the parking brake starts the recording; setting it again on arrival saves the flight (the Fenix A320's own parking-brake switch is recognized too)
 
 ### Managing logbooks
 - **File → Open Logbook…** — switch to a different logbook file at any time without restarting
